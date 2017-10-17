@@ -15,16 +15,16 @@
  */
 package jetbrains.exodus.entitystore.iterate;
 
-import jetbrains.exodus.core.dataStructures.hash.HashMap;
+import jetbrains.exodus.core.dataStructures.hash.LongHashMap;
 import jetbrains.exodus.core.dataStructures.hash.LongIterator;
 import jetbrains.exodus.core.dataStructures.hash.LongSet;
 import jetbrains.exodus.entitystore.*;
+import jetbrains.exodus.entitystore.tables.PropertyValue;
+import jetbrains.exodus.util.MathUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Comparator;
-import java.util.Map;
-import java.util.PriorityQueue;
+import java.util.*;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public final class SortIterable extends EntityIterableDecoratorBase {
@@ -40,8 +40,8 @@ public final class SortIterable extends EntityIterableDecoratorBase {
             @Override
             public EntityIterableBase instantiate(PersistentStoreTransaction txn, PersistentEntityStoreImpl store, Object[] parameters) {
                 return new SortIterable(txn, (EntityIterableBase) parameters[3],
-                        (EntityIterableBase) parameters[3], Integer.valueOf((String) parameters[0]),
-                        Integer.valueOf((String) parameters[1]), "0".equals(parameters[2]));
+                    (EntityIterableBase) parameters[3], Integer.valueOf((String) parameters[0]),
+                    Integer.valueOf((String) parameters[1]), "0".equals(parameters[2]));
             }
         });
     }
@@ -118,8 +118,26 @@ public final class SortIterable extends EntityIterableDecoratorBase {
             return new EntityTypeFilteredIterator(source, sourceTypeId);
         }
         final PersistentEntityStoreImpl store = getStore();
-        final EntityIterableBase cached = store.getEntityIterableCache().putIfNotCached(propIndex);
-        final EntityIterator propIterator = ascending ? cached.getIteratorImpl(txn) : cached.getReverseIteratorImpl(txn);
+        final EntityIterableBase cachedPropertyIndex = store.getEntityIterableCache().putIfNotCached(propIndex);
+
+        if (propIndex.nonCachedHasFastCountAndIsEmpty() && store.getConfig().isDebugAllowInMemorySort()) {
+            // if property index is much greater than source then it makes sense to sort source in-memory (XD-609)
+            final long sourceSize = source.size();
+            if (sourceSize == 0) {
+                return EntityIteratorBase.EMPTY;
+            }
+            final long indexSize = cachedPropertyIndex.size();
+            final long log2IndexSize = MathUtil.longLogarithm(indexSize);
+            final long sizeMulLog = sourceSize * log2IndexSize;
+            final boolean isCachedInstance = cachedPropertyIndex.isCachedInstance();
+            if ((isCachedInstance && sizeMulLog * sourceSize < indexSize) ||
+                (!isCachedInstance && sizeMulLog * log2IndexSize < indexSize)) {
+                return new StableInMemorySortIterator((int) sourceSize);
+            }
+        }
+
+        final EntityIterator propIterator = ascending ?
+            cachedPropertyIndex.getIteratorImpl(txn) : cachedPropertyIndex.getReverseIteratorImpl(txn);
         if (propIterator.shouldBeDisposed()) {
             store.getAndCheckCurrentTransaction().registerEntityIterator(propIterator);
         }
@@ -180,8 +198,8 @@ public final class SortIterable extends EntityIterableDecoratorBase {
                                                     @Nullable final Comparable oldValue,
                                                     @Nullable final Comparable newValue) {
                 return sourceTypeId == typeId &&
-                        (decorated.isMatchedPropertyChanged(typeId, propertyId, oldValue, newValue) ||
-                                propIndex.getHandle().isMatchedPropertyChanged(typeId, propertyId, oldValue, newValue));
+                    (decorated.isMatchedPropertyChanged(typeId, propertyId, oldValue, newValue) ||
+                        propIndex.getHandle().isMatchedPropertyChanged(typeId, propertyId, oldValue, newValue));
             }
         };
     }
@@ -193,14 +211,16 @@ public final class SortIterable extends EntityIterableDecoratorBase {
 
     @SuppressWarnings({"MethodOnlyUsedFromInnerClass"})
     @NotNull
-    private Map<EntityId, Integer> getRightOrder() {
-        final Map<EntityId, Integer> result = new HashMap<>();
+    private LongHashMap<Integer> getRightOrder() {
+        final LongHashMap<Integer> result = new LongHashMap<>();
         int position = 0;
         final EntityIterator sorted = source.iterator();
         while (sorted.hasNext()) {
             final EntityId entityId = sorted.nextId();
-            if (entityId == null || sourceTypeId == entityId.getTypeId()) {
-                result.put(entityId, ++position);
+            if (entityId == null) {
+                result.put(Long.MAX_VALUE, (Integer) position++);
+            } else if (sourceTypeId == entityId.getTypeId()) {
+                result.put(entityId.getLocalId(), (Integer) position++);
             }
         }
         return result;
@@ -210,45 +230,41 @@ public final class SortIterable extends EntityIterableDecoratorBase {
 
         @NotNull
         private final PropertyValueIterator propertyValueIterator;
-        private final PriorityQueue<EntityId> sameValueQueue;
-        private final Map<EntityId, Integer> rightOrder;
-        private EntityId nextId;
+        private final PriorityQueue<Long> sameValueQueue;
+        private final LongHashMap<Integer> rightOrder;
+        private long nextId;
+        private long lastEntityId;
         private Comparable currentValue;
         private Comparable lastValue;
-        private EntityId lastEntityId;
 
         private StableSortIterator(@NotNull final PropertyValueIterator propertyValueIterator) {
             super(propIndex);
             this.propertyValueIterator = propertyValueIterator;
-            sameValueQueue = new PriorityQueue<>(4, new Comparator<EntityId>() {
+            sameValueQueue = new PriorityQueue<>(4, new Comparator<Long>() {
                 @Override
-                public int compare(final EntityId o1, final EntityId o2) {
+                public int compare(final Long o1, final Long o2) {
                     return rightOrder.get(o1) - rightOrder.get(o2);
                 }
             });
             rightOrder = getRightOrder();
-            nextId = null;
             currentValue = null;
             lastValue = null;
-            lastEntityId = null;
         }
 
         @SuppressWarnings({"OverlyLongMethod"})
         @Override
         protected boolean hasNextImpl() {
-            final PriorityQueue<EntityId> sameValueQueue = this.sameValueQueue;
-            final Map<EntityId, Integer> rightOrder = this.rightOrder;
             if (sameValueQueue.isEmpty()) {
                 Comparable lastValue = this.lastValue;
-                //noinspection VariableNotUsedInsideIf
                 if (lastValue != null) {
                     currentValue = lastValue;
                     sameValueQueue.offer(lastEntityId);
                     this.lastValue = null;
-                    lastEntityId = null;
                 }
                 while (propertyValueIterator.hasNext()) {
-                    final EntityId nextId = propertyValueIterator.nextId();
+                    // property-value index can't return null since there cannot be an entity with null id
+                    //noinspection ConstantConditions
+                    final long nextId = propertyValueIterator.nextId().getLocalId();
                     if (rightOrder.containsKey(nextId)) {
                         final Comparable currentValue = propertyValueIterator.currentValue();
                         if (currentValue != null && lastValue != null && lastValue.compareTo(currentValue) != 0) {
@@ -264,7 +280,7 @@ public final class SortIterable extends EntityIterableDecoratorBase {
             }
             while (true) {
                 if (!sameValueQueue.isEmpty()) {
-                    final EntityId id = sameValueQueue.poll();
+                    final long id = sameValueQueue.poll();
                     nextId = id;
                     rightOrder.remove(id);
                     return true;
@@ -275,14 +291,9 @@ public final class SortIterable extends EntityIterableDecoratorBase {
                 if (rightOrder.isEmpty()) {
                     break;
                 }
-                for (EntityId entityId : rightOrder.keySet()) {
-                    sameValueQueue.offer(entityId);
+                for (long localId : rightOrder.keySet()) {
+                    sameValueQueue.offer(localId);
                 }
-            }
-            if (rightOrder.containsKey(null)) {
-                rightOrder.remove(null);
-                nextId = null;
-                return true;
             }
             return false;
         }
@@ -290,7 +301,8 @@ public final class SortIterable extends EntityIterableDecoratorBase {
         @Override
         @Nullable
         public EntityId nextIdImpl() {
-            return nextId;
+            final long nextId = this.nextId;
+            return nextId == Long.MAX_VALUE ? null : new PersistentEntityId(sourceTypeId, nextId);
         }
 
         @Override
@@ -320,7 +332,6 @@ public final class SortIterable extends EntityIterableDecoratorBase {
 
         @Override
         protected boolean hasNextImpl() {
-            final LongSet rightOrder = this.rightOrder;
             while (!rightOrder.isEmpty() && propIterator.hasNext()) {
                 final EntityId nextId = propIterator.nextId();
                 if (nextId != null && rightOrder.remove(nextId.getLocalId())) {
@@ -352,6 +363,111 @@ public final class SortIterable extends EntityIterableDecoratorBase {
         }
     }
 
+    // TODO:
+    //    1. Get rid of using property name for getting property value
+    //    2. Consider using Keap for lazy sorting
+    private final class StableInMemorySortIterator extends NonDisposableEntityIterator implements PropertyValueIterator {
+
+        private final List<IdValuePair> pairs;
+        private boolean hasNull;
+        private int cursor;
+        private Comparable currentValue;
+
+        private StableInMemorySortIterator(final int sourceSize) {
+            super(propIndex);
+
+            pairs = new ArrayList<>(sourceSize / 2);
+            hasNull = false;
+            cursor = 0;
+
+            final PersistentEntityStoreImpl store = getStore();
+            final PersistentStoreTransaction txn = getTransaction();
+            final String propertyName = store.getPropertyName(txn, propertyId);
+            if (propertyName == null) {
+                throw new NullPointerException("Property name is null");
+            }
+
+            final int propertyId = store.getPropertyId(txn, propertyName, false);
+            if (propertyId < 0) {
+                throw new IllegalStateException("Property name is not registered");
+            }
+
+            final EntityIterator it = source.iterator();
+
+            while (it.hasNext()) {
+                final PersistentEntityId nextId = (PersistentEntityId) it.nextId();
+                if (nextId == null) {
+                    hasNull = true;
+                } else if (nextId.getTypeId() == sourceTypeId) {
+                    final PropertyValue propValue = store.getPropertyValue(txn, new PersistentEntity(store, nextId), propertyId);
+                    pairs.add(new IdValuePair(nextId.getLocalId(), propValue == null ? null : propValue.getData()));
+                }
+            }
+
+            // finally sort
+            final Object[] array = pairs.toArray();
+            Arrays.sort(array, new Comparator() {
+                @Override
+                public int compare(final Object o1, final Object o2) {
+                    final Comparable propValue1 = ((IdValuePair) o1).propValue;
+                    final Comparable propValue2 = ((IdValuePair) o2).propValue;
+                    if (propValue1 == null && propValue2 == null) {
+                        return 0;
+                    }
+                    if (propValue1 == null) {
+                        return -1;
+                    }
+                    if (propValue2 == null) {
+                        return 1;
+                    }
+                    return propValue1.compareTo(propValue2);
+                }
+            });
+            final ListIterator<IdValuePair> i = pairs.listIterator();
+            for (final Object o : array) {
+                i.next();
+                i.set((IdValuePair) o);
+            }
+        }
+
+        @Override
+        protected boolean hasNextImpl() {
+            return cursor < pairs.size() || hasNull;
+        }
+
+        @Nullable
+        @Override
+        protected EntityId nextIdImpl() {
+            if (cursor < pairs.size()) {
+                final IdValuePair pair = pairs.get(cursor++);
+                currentValue = pair.propValue;
+                return new PersistentEntityId(sourceTypeId, pair.localId);
+            } else {
+                hasNull = false;
+                currentValue = null;
+                return null;
+            }
+        }
+
+        @Nullable
+        @Override
+        public Comparable currentValue() {
+            return currentValue;
+        }
+    }
+
+    private static final class IdValuePair {
+
+        final long localId;
+        @Nullable
+        final Comparable propValue;
+
+        IdValuePair(final long localId, @Nullable final Comparable propValue) {
+            this.localId = localId;
+            this.propValue = propValue;
+        }
+    }
+
     private static final class PropertyValueIteratorFixingDecorator extends NonDisposableEntityIterator implements PropertyValueIterator {
 
         private final PropertyValueIterator index;
@@ -359,9 +475,9 @@ public final class SortIterable extends EntityIterableDecoratorBase {
         private boolean hasNext;
         private boolean hasNextValid;
 
-        public PropertyValueIteratorFixingDecorator(@NotNull final EntityIterableBase iterable,
-                                                    @NotNull final PropertyValueIterator index,
-                                                    @NotNull final EntityIteratorBase iterator) {
+        PropertyValueIteratorFixingDecorator(@NotNull final EntityIterableBase iterable,
+                                             @NotNull final PropertyValueIterator index,
+                                             @NotNull final EntityIteratorBase iterator) {
             super(iterable);
             this.index = index;
             this.iterator = iterator;

@@ -25,20 +25,20 @@ import org.jetbrains.annotations.Nullable;
 public class TreeCursor implements ITreeCursor {
 
     @NotNull
-    protected final TreeTraverser traverser;
+    final TreeTraverser traverser;
+    protected boolean canGoDown;
+    boolean alreadyIn;
+    boolean inited;
 
-    protected boolean canGoDown = true;
-    protected boolean alreadyIn;
-    protected boolean inited = false;
-
-    public TreeCursor(TreeTraverser traverser) {
-        this.traverser = traverser;
-        alreadyIn = false;
+    public TreeCursor(@NotNull final TreeTraverser traverser) {
+        this(traverser, false);
     }
 
-    public TreeCursor(TreeTraverser traverser, boolean alreadyIn) {
+    public TreeCursor(@NotNull final TreeTraverser traverser, boolean alreadyIn) {
         this.traverser = traverser;
         this.alreadyIn = alreadyIn;
+        canGoDown = true;
+        inited = false;
     }
 
     protected boolean hasNext() {
@@ -65,27 +65,13 @@ public class TreeCursor implements ITreeCursor {
             alreadyIn = false;
             return true;
         }
-        while (true) {
-            if (canGoDown) {
-                if (traverser.canMoveDown()) {
-                    if (traverser.moveDown().hasValue()) {
-                        return true;
-                    }
-                    continue;
-                }
-            } else {
-                canGoDown = true;
-            }
-            if (traverser.canMoveRight()) {
-                final INode node = traverser.moveRight();
-                if (!traverser.canMoveDown() && node.hasValue()) {
-                    return true;
-                }
-            } else if (!advance()) {
-                break;
-            }
+        final boolean result = moveToNext();
+        if (!result) {
+            traverser.init(false);
+            canGoDown = true;
+            moveToPrev();
         }
-        return false;
+        return result;
     }
 
     @Override
@@ -98,53 +84,13 @@ public class TreeCursor implements ITreeCursor {
             alreadyIn = false;
             return true;
         }
-        while (true) {
-            if (canGoDown) {
-                if (traverser.canMoveDown()) {
-                    if (traverser.moveDownToLast().hasValue()) {
-                        return true;
-                    }
-                    continue;
-                }
-            } else {
-                canGoDown = true;
-            }
-            if (traverser.canMoveLeft()) {
-                final INode node = traverser.moveLeft();
-                if (!traverser.canMoveDown() && node.hasValue()) {
-                    return true;
-                }
-            } else if (!retreat()) {
-                break;
-            }
+        final boolean result = moveToPrev();
+        if (!result) {
+            traverser.init(true);
+            canGoDown = true;
+            moveToNext();
         }
-        return false;
-    }
-
-    protected boolean advance() {
-        while (traverser.canMoveUp()) {
-            if (traverser.canMoveRight()) {
-                return true;
-            } else {
-                traverser.moveUp();
-                canGoDown = false;
-            }
-        }
-
-        return traverser.canMoveRight();
-    }
-
-    protected boolean retreat() {
-        while (traverser.canMoveUp()) {
-            if (traverser.canMoveLeft()) {
-                return true;
-            } else {
-                traverser.moveUp();
-                canGoDown = false;
-            }
-        }
-
-        return traverser.canMoveLeft();
+        return result;
     }
 
     @Override
@@ -219,7 +165,6 @@ public class TreeCursor implements ITreeCursor {
 
     @Override
     public void close() {
-        // do nothing
     }
 
     @Override
@@ -249,4 +194,77 @@ public class TreeCursor implements ITreeCursor {
         return null;
     }
 
+    private boolean moveToNext() {
+        while (true) {
+            if (canGoDown) {
+                if (traverser.canMoveDown()) {
+                    if (traverser.moveDown().hasValue()) {
+                        return true;
+                    }
+                    continue;
+                }
+            } else {
+                canGoDown = true;
+            }
+            if (traverser.canMoveRight()) {
+                final INode node = traverser.moveRight();
+                if (!traverser.canMoveDown() && node.hasValue()) {
+                    return true;
+                }
+            } else if (!advance()) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    private boolean moveToPrev() {
+        while (true) {
+            if (canGoDown) {
+                if (traverser.canMoveDown()) {
+                    if (traverser.moveDownToLast().hasValue()) {
+                        return true;
+                    }
+                    continue;
+                }
+            } else {
+                canGoDown = true;
+            }
+            if (traverser.canMoveLeft()) {
+                final INode node = traverser.moveLeft();
+                if (!traverser.canMoveDown() && node.hasValue()) {
+                    return true;
+                }
+            } else if (!retreat()) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    private boolean advance() {
+        while (traverser.canMoveUp()) {
+            if (traverser.canMoveRight()) {
+                return true;
+            } else {
+                traverser.moveUp();
+                canGoDown = false;
+            }
+        }
+
+        return traverser.canMoveRight();
+    }
+
+    private boolean retreat() {
+        while (traverser.canMoveUp()) {
+            if (traverser.canMoveLeft()) {
+                return true;
+            } else {
+                traverser.moveUp();
+                canGoDown = false;
+            }
+        }
+
+        return traverser.canMoveLeft();
+    }
 }

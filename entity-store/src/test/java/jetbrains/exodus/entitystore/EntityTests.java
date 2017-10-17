@@ -27,12 +27,12 @@ import jetbrains.exodus.util.LightByteArrayOutputStream;
 import jetbrains.exodus.util.UTFUtil;
 import org.jetbrains.annotations.NotNull;
 import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
 
 import java.io.*;
 import java.net.URL;
 import java.util.Date;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 
 @SuppressWarnings({"RawUseOfParameterizedType"})
 public class EntityTests extends EntityStoreTestBase {
@@ -43,7 +43,9 @@ public class EntityTests extends EntityStoreTestBase {
             "testConcurrentSerializableChanges",
             "testEntityStoreClear",
             "testEntityStoreClear2",
-            "testGettingPhantomLink"};
+            "testSetPhantomLink",
+            "testAddPhantomLink"
+        };
     }
 
     public void testCreateSingleEntity() throws Exception {
@@ -878,10 +880,20 @@ public class EntityTests extends EntityStoreTestBase {
         });
     }
 
-    @Test
-    @Ignore
-    public void createPhantomLink() {
+    public void testSetPhantomLink() throws InterruptedException {
+        setOrAddPhantomLink(false);
+    }
+
+    public void testAddPhantomLink() throws InterruptedException {
+        setOrAddPhantomLink(true);
+    }
+
+    private void setOrAddPhantomLink(final boolean setLink) throws InterruptedException {
         final PersistentEntityStoreImpl store = getEntityStore();
+
+        store.getEnvironment().getEnvironmentConfig().setGcEnabled(false);
+        store.getConfig().setDebugTestLinkedEntities(true);
+
         final Entity issue = store.computeInTransaction(new StoreTransactionalComputable<Entity>() {
             @Override
             public Entity compute(@NotNull StoreTransaction txn) {
@@ -894,30 +906,54 @@ public class EntityTests extends EntityStoreTestBase {
                 return txn.newEntity("Comment");
             }
         });
-        DeferredIO.getJobProcessor().queueIn(new Job() {
+        final CountDownLatch startBoth = new CountDownLatch(2);
+        final Semaphore deleted = new Semaphore(0);
+        DeferredIO.getJobProcessor().queue(new Job() {
             @Override
             protected void execute() throws Throwable {
                 store.executeInTransaction(new StoreTransactionalExecutable() {
                     @Override
                     public void execute(@NotNull StoreTransaction txn) {
+                        startBoth.countDown();
+                        try {
+                            startBoth.await();
+                        } catch (InterruptedException ignore) {
+                        }
                         comment.delete();
+                        txn.flush();
+                        deleted.release();
                     }
                 });
             }
-        }, 2000);
-        final int[] i = {0};
-        store.executeInTransaction(new StoreTransactionalExecutable() {
-            @Override
-            public void execute(@NotNull StoreTransaction txn) {
-                try {
-                    Thread.sleep(3000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                issue.setLink("comment", comment);
-                ++i[0];
-            }
         });
+        final int[] i = {0};
+        TestUtil.runWithExpectedException(new Runnable() {
+            @Override
+            public void run() {
+                store.executeInTransaction(new StoreTransactionalExecutable() {
+                    @Override
+                    public void execute(@NotNull StoreTransaction txn) {
+                        final boolean first = i[0] == 0;
+                        if (first) {
+                            startBoth.countDown();
+                            try {
+                                startBoth.await();
+                            } catch (InterruptedException ignore) {
+                            }
+                        }
+                        ++i[0];
+                        if (setLink) {
+                            issue.setLink("comment", comment);
+                        } else {
+                            issue.addLink("comment", comment);
+                        }
+                        if (first) {
+                            deleted.acquireUninterruptibly();
+                        }
+                    }
+                });
+            }
+        }, EntityRemovedInDatabaseException.class);
         Assert.assertEquals(2, i[0]);
         store.executeInReadonlyTransaction(new StoreTransactionalExecutable() {
             @Override

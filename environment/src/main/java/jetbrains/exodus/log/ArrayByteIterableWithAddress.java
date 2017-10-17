@@ -23,6 +23,8 @@ import jetbrains.exodus.bindings.LongBinding;
 import jetbrains.exodus.util.ByteIterableUtil;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Arrays;
+
 class ArrayByteIterableWithAddress extends ByteIterableWithAddress {
 
     @NotNull
@@ -38,6 +40,30 @@ class ArrayByteIterableWithAddress extends ByteIterableWithAddress {
     }
 
     @Override
+    public byte byteAt(final int offset) {
+        return bytes[start + offset];
+    }
+
+    @Override
+    public long nextLong(final int offset, final int length) {
+        return LongBinding.entryToUnsignedLong(bytes, start + offset, length);
+    }
+
+    @Override
+    public int getCompressedUnsignedInt() {
+        int result = 0;
+        int shift = 0;
+        for (int i = start; ; ++i) {
+            final byte b = bytes[i];
+            result += (b & 0x7f) << shift;
+            if ((b & 0x80) != 0) {
+                return result;
+            }
+            shift += 7;
+        }
+    }
+
+    @Override
     public ByteIteratorWithAddress iterator() {
         return iterator(0);
     }
@@ -49,8 +75,11 @@ class ArrayByteIterableWithAddress extends ByteIterableWithAddress {
 
     @Override
     public int compareTo(final int offset, final int len, @NotNull final ByteIterable right) {
-        final int absoluteOffset = start + offset;
-        return ByteIterableUtil.compare(bytes, absoluteOffset + len, absoluteOffset, right.getBytesUnsafe(), right.getLength());
+        if (right instanceof SubIterable) {
+            final SubIterable r = (SubIterable) right;
+            return ByteIterableUtil.compare(bytes, len, start + offset, r.getRawBytes(), r.getLength(), r.offset);
+        }
+        return ByteIterableUtil.compare(bytes, len, start + offset, right.getBytesUnsafe(), right.getLength());
     }
 
     @Override
@@ -115,8 +144,7 @@ class ArrayByteIterableWithAddress extends ByteIterableWithAddress {
 
     private static class SubIterable extends ByteIterableBase {
 
-        private final int offset;
-        private byte[] bytesUnsafe;
+        private int offset;
 
         SubIterable(@NotNull final byte[] bytes, final int offset, final int length) {
             this.bytes = bytes;
@@ -125,8 +153,12 @@ class ArrayByteIterableWithAddress extends ByteIterableWithAddress {
         }
 
         @Override
-        public int compareTo(ByteIterable right) {
-            return ByteIterableUtil.compare(bytes, offset + length, offset, right.getBytesUnsafe(), right.getLength());
+        public int compareTo(@NotNull final ByteIterable right) {
+            if (right instanceof SubIterable) {
+                final SubIterable r = (SubIterable) right;
+                return ByteIterableUtil.compare(bytes, length, offset, r.bytes, r.length, r.offset);
+            }
+            return ByteIterableUtil.compare(bytes, length, offset, right.getBytesUnsafe(), right.getLength());
         }
 
         @Override
@@ -138,24 +170,21 @@ class ArrayByteIterableWithAddress extends ByteIterableWithAddress {
         protected ByteIterator getIterator() {
             return new ByteIterator() {
 
-                int remained = length;
                 int i = offset;
 
                 @Override
                 public boolean hasNext() {
-                    return remained > 0;
+                    return length > i - offset;
                 }
 
                 @Override
                 public byte next() {
-                    remained--;
                     return bytes[i++];
                 }
 
                 @Override
                 public long skip(long bytes) {
-                    final int result = Math.min(remained, (int) bytes);
-                    remained -= result;
+                    final int result = Math.min(length - i + offset, (int) bytes);
                     i += result;
                     return result;
                 }
@@ -164,15 +193,15 @@ class ArrayByteIterableWithAddress extends ByteIterableWithAddress {
 
         @Override
         public byte[] getBytesUnsafe() {
-            if (bytesUnsafe == null) {
-                if (offset == 0) {
-                    bytesUnsafe = bytes;
-                } else {
-                    bytesUnsafe = new byte[length];
-                    System.arraycopy(bytes, offset, bytesUnsafe, 0, length);
-                }
+            if (offset > 0) {
+                bytes = Arrays.copyOfRange(bytes, offset, offset + length);
+                offset = 0;
             }
-            return bytesUnsafe;
+            return bytes;
+        }
+
+        private byte[] getRawBytes() {
+            return bytes;
         }
     }
 }

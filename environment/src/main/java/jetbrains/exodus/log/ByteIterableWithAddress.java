@@ -32,6 +32,18 @@ public abstract class ByteIterableWithAddress implements ByteIterable {
         return address;
     }
 
+    public byte byteAt(final int offset) {
+        return iterator(offset).next();
+    }
+
+    public long nextLong(final int offset, final int length) {
+        return iterator(offset).nextLong(length);
+    }
+
+    public int getCompressedUnsignedInt() {
+        return CompressedUnsignedLongByteIterable.getInt(this);
+    }
+
     @Override
     public abstract ByteIteratorWithAddress iterator();
 
@@ -63,7 +75,7 @@ public abstract class ByteIterableWithAddress implements ByteIterable {
         throw new UnsupportedOperationException();
     }
 
-    public static ByteIterableWithAddress getEmpty(final long address) {
+    static ByteIterableWithAddress getEmpty(final long address) {
         return new ArrayByteIterableWithAddress(address, ByteIterable.EMPTY_BYTES, 0, 0);
     }
 }

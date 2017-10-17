@@ -17,7 +17,6 @@ package jetbrains.exodus.tree.btree;
 
 import jetbrains.exodus.ByteIterable;
 import jetbrains.exodus.log.ByteIterableWithAddress;
-import jetbrains.exodus.log.ByteIteratorWithAddress;
 import jetbrains.exodus.log.CompressedUnsignedLongByteIterable;
 import jetbrains.exodus.log.RandomAccessLoggable;
 import org.jetbrains.annotations.NotNull;
@@ -30,16 +29,12 @@ class LeafNode extends BaseLeafNode {
     @NotNull
     private final RandomAccessLoggable loggable;
     private final int keyLength;
-    private final int valueLength;
 
     LeafNode(@NotNull final RandomAccessLoggable loggable) {
         this.loggable = loggable;
         final ByteIterableWithAddress data = loggable.getData();
-        final ByteIteratorWithAddress iterator = data.iterator();
-        final int keyLength = CompressedUnsignedLongByteIterable.getInt(iterator);
-        final long dataAddress = iterator.getAddress();
-        final int keyRecordSize = (int) (dataAddress - data.getDataAddress());
-        valueLength = loggable.getDataLength() - keyRecordSize - keyLength;
+        final int keyLength = data.getCompressedUnsignedInt();
+        final int keyRecordSize = CompressedUnsignedLongByteIterable.getCompressedSize(keyLength);
         this.keyLength = (keyLength << 3) + keyRecordSize;
     }
 
@@ -59,7 +54,7 @@ class LeafNode extends BaseLeafNode {
 
     @Override
     public int compareValueTo(@NotNull final ByteIterable iterable) {
-        return loggable.getData().compareTo(getKeyRecordSize() + getKeyLength(), valueLength, iterable);
+        return loggable.getData().compareTo(getKeyRecordSize() + getKeyLength(), getValueLength(), iterable);
     }
 
     @Override
@@ -71,7 +66,7 @@ class LeafNode extends BaseLeafNode {
     @Override
     @NotNull
     public ByteIterable getValue() {
-        return getRawValue().subIterable(0, valueLength);
+        return loggable.getData().subIterable(getKeyRecordSize() + getKeyLength(), getValueLength());
     }
 
     @Override
@@ -80,8 +75,8 @@ class LeafNode extends BaseLeafNode {
     }
 
     @NotNull
-    ByteIterableWithAddress getRawValue() {
-        return loggable.getData().clone(getKeyRecordSize() + getKeyLength());
+    ByteIterableWithAddress getRawValue(final int offset) {
+        return loggable.getData().clone(getKeyRecordSize() + getKeyLength() + offset);
     }
 
     private int getKeyLength() {
@@ -90,6 +85,10 @@ class LeafNode extends BaseLeafNode {
 
     private int getKeyRecordSize() {
         return keyLength & 7;
+    }
+
+    private int getValueLength() {
+        return loggable.getDataLength() - getKeyRecordSize() - getKeyLength();
     }
 
     protected void doReclaim(@NotNull BTreeReclaimTraverser context, final int leafIndex) {
