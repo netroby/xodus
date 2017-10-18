@@ -33,6 +33,8 @@ public interface DataReader {
 
     void truncateBlock(long blockAddress, long length);
 
+    void invalidateBlock(long blockAddress);
+
     void clear();
 
     void close();

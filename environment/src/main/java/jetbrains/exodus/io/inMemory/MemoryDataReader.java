@@ -70,6 +70,9 @@ public class MemoryDataReader implements DataReader {
     }
 
     @Override
+    public void invalidateBlock(long blockAddress) {}
+
+    @Override
     public void clear() {
         data.clear();
     }

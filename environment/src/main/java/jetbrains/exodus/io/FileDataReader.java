@@ -73,7 +73,7 @@ public class FileDataReader implements DataReader {
 
     @Override
     public void removeBlock(long blockAddress, @NotNull final RemoveBlockType rbt) {
-        final File file = new File(dir, LogUtil.getLogFilename(blockAddress));
+        final FileBlock file = getBlock(blockAddress);
         removeFileFromFileCache(file);
         setWritable(file);
         final boolean deleted = rbt == RemoveBlockType.Delete ? file.delete() : renameFile(file);
@@ -99,6 +99,12 @@ public class FileDataReader implements DataReader {
         } catch (IOException e) {
             throw new ExodusException("Failed to truncate file " + file.getAbsolutePath(), e);
         }
+    }
+
+    @Override
+    public void invalidateBlock(long blockAddress) {
+        final FileBlock file = getBlock(blockAddress);
+        removeFileFromFileCache(file);
     }
 
     @Override

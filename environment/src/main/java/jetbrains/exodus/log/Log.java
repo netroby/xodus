@@ -243,9 +243,6 @@ public final class Log implements Closeable {
 
     @SuppressWarnings({"OverlyLongMethod"})
     public void setHighAddress(final long highAddress) {
-        if (highAddress > this.highAddress) {
-            throw new ExodusException("Only can decrease high address");
-        }
         if (highAddress == this.highAddress) {
             return;
         }
@@ -257,29 +254,40 @@ public final class Log implements Closeable {
         }
         // end of test-only code
 
-        // at first, remove all files which are higher than highAddress
-        bufferedWriter.close();
-        final LongArrayList blocksToDelete = new LongArrayList();
-        long blockToTruncate = -1L;
-        synchronized (blockAddrs) {
-            LongSkipList.SkipListNode node = blockAddrs.getMaximumNode();
-            while (node != null) {
-                long blockAddress = node.getKey();
-                if (blockAddress <= highAddress) {
-                    blockToTruncate = blockAddress;
-                    break;
+        if (highAddress < this.highAddress) {
+            // at first, remove all files which are higher than highAddress
+            final LongArrayList blocksToDelete = new LongArrayList();
+            long blockToTruncate = -1L;
+            synchronized (blockAddrs) {
+                LongSkipList.SkipListNode node = blockAddrs.getMaximumNode();
+                while (node != null) {
+                    long blockAddress = node.getKey();
+                    if (blockAddress <= highAddress) {
+                        blockToTruncate = blockAddress;
+                        break;
+                    }
+                    blocksToDelete.add(blockAddress);
+                    node = blockAddrs.getPrevious(node);
                 }
-                blocksToDelete.add(blockAddress);
-                node = blockAddrs.getPrevious(node);
             }
-        }
 
-        // truncate log
-        for (int i = 0; i < blocksToDelete.size(); ++i) {
-            removeFile(blocksToDelete.get(i));
-        }
-        if (blockToTruncate >= 0) {
-            truncateFile(blockToTruncate, highAddress - blockToTruncate);
+            // truncate log
+            for (int i = 0; i < blocksToDelete.size(); ++i) {
+                removeFile(blocksToDelete.get(i));
+            }
+            if (blockToTruncate >= 0) {
+                truncateFile(blockToTruncate, highAddress - blockToTruncate);
+            }
+        } else {
+            final long oldLastFileAddress = getHighFileAddress();
+            final long newLastFileAddress = getFileAddress(highAddress);
+            if (oldLastFileAddress < newLastFileAddress) {
+                synchronized (blockAddrs) {
+                    for (long i = oldLastFileAddress + fileLengthBound; i <= newLastFileAddress; i += fileLengthBound) {
+                        blockAddrs.add(i);
+                    }
+                }
+            }
         }
 
         // update buffered writer
@@ -683,6 +691,21 @@ public final class Log implements Closeable {
         // clear cache
         for (long offset = length - (length % cachePageSize); offset < fileLengthBound; offset += cachePageSize) {
             cache.removePage(this, address + offset);
+        }
+    }
+
+    private void invalidateFile(final long address) {
+        synchronized (blockAddrs) {
+            blockAddrs.remove(address);
+        }
+        invalidateFileTail(address, address);
+    }
+
+    private void invalidateFileTail(final long fileAddress, final long tailAddress) {
+        reader.invalidateBlock(fileAddress);
+        final long blockEnd = fileAddress + fileLengthBound;
+        for (long i = tailAddress - tailAddress % cachePageSize; i < blockEnd; i += cachePageSize) {
+            cache.removePage(this, i);
         }
     }
 
