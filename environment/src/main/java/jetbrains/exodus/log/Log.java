@@ -241,8 +241,12 @@ public final class Log implements Closeable {
         return highAddress;
     }
 
-    @SuppressWarnings({"OverlyLongMethod"})
     public void setHighAddress(final long highAddress) {
+        setHighAddress(highAddress, true);
+    }
+
+    @SuppressWarnings({"OverlyLongMethod"})
+    public void setHighAddress(final long highAddress, boolean truncate) {
         if (highAddress == this.highAddress) {
             return;
         }
@@ -271,12 +275,21 @@ public final class Log implements Closeable {
                 }
             }
 
-            // truncate log
-            for (int i = 0; i < blocksToDelete.size(); ++i) {
-                removeFile(blocksToDelete.get(i));
-            }
-            if (blockToTruncate >= 0) {
-                truncateFile(blockToTruncate, highAddress - blockToTruncate);
+            if (truncate) {
+                // truncate log
+                for (int i = 0; i < blocksToDelete.size(); ++i) {
+                    removeFile(blocksToDelete.get(i));
+                }
+                if (blockToTruncate >= 0) {
+                    truncateFile(blockToTruncate, highAddress - blockToTruncate);
+                }
+            } else {
+                for (int i = 0; i < blocksToDelete.size(); ++i) {
+                    invalidateFile(blocksToDelete.get(i));
+                }
+                if (blockToTruncate >= 0) {
+                    invalidateFileTail(blockToTruncate, highAddress);
+                }
             }
         } else {
             final long oldLastFileAddress = getHighFileAddress();
