@@ -105,7 +105,7 @@ private fun getSlotBit(slotIndex: Int) = 1L shl slotIndex
 private fun RandomAccessFile.lockVersion() = channel.lock(0L, VERSION_SIZE.toLong(), false)
 
 private fun RandomAccessFile.tryLockEverythingExceptVersion() =
-        channel.tryLock(VERSION_SIZE.toLong(), Long.MAX_VALUE, false)
+        channel.tryLock(VERSION_SIZE.toLong(), Long.MAX_VALUE - VERSION_SIZE, false)
 
 private fun RandomAccessFile.formatCoordinationFile() {
     val buffer = ByteBuffer.allocate(SLOTS_OFFSET)
