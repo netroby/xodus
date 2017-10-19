@@ -96,8 +96,6 @@ public final class Log implements Closeable {
         reader.setLog(this);
         location = reader.getLocation();
 
-        checkLogConsistency();
-
         newFileListeners = new ArrayList<>(2);
         readBytesListeners = new ArrayList<>(2);
         removeFileListeners = new ArrayList<>(2);
@@ -118,11 +116,15 @@ public final class Log implements Closeable {
         highAddress = 0;
         approvedHighAddress = 0;
 
+        setBufferedWriter(createEmptyBufferedWriter(config.getWriter()));
+    }
+
+    public void init() {
+        checkLogConsistency();
+
         final DataWriter baseWriter = config.getWriter();
         final LongSkipList.SkipListNode lastFile = blockAddrs.getMaximumNode();
-        if (lastFile == null) {
-            setBufferedWriter(createEmptyBufferedWriter(baseWriter));
-        } else {
+        if (lastFile != null) {
             final long lastFileAddress = lastFile.getKey();
             highAddress = lastFileAddress + reader.getBlock(lastFileAddress).length();
             final long highPageAddress = getHighPageAddress();

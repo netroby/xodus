@@ -88,6 +88,8 @@ public class EnvironmentImpl implements Environment {
 
     @SuppressWarnings({"ThisEscapedInObjectConstruction"})
     EnvironmentImpl(@NotNull final Log log, @NotNull final EnvironmentConfig ec) {
+        log.init();
+
         this.log = log;
         this.ec = ec;
         applyEnvironmentSettings(log.getLocation(), ec);

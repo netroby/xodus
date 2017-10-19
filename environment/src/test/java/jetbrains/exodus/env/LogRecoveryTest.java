@@ -15,6 +15,7 @@
  */
 package jetbrains.exodus.env;
 
+import jetbrains.exodus.log.Log;
 import jetbrains.exodus.log.LogConfig;
 import jetbrains.exodus.tree.btree.BTreeBase;
 import org.junit.Test;
@@ -101,7 +102,9 @@ public class LogRecoveryTest extends EnvironmentTestsBase {
         writer.close();
 
         // only 'max' first loggables should remain
-        assertLoggableTypes(max, Environments.newLogInstance(LogConfig.create(reader, writer)).getLoggableIterator(0), seq);
+        Log log = Environments.newLogInstance(LogConfig.create(reader, writer));
+        log.init();
+        assertLoggableTypes(max, log.getLoggableIterator(0), seq);
     }
 
 }
