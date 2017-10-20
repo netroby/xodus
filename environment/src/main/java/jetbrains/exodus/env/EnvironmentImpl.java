@@ -22,12 +22,15 @@ import jetbrains.exodus.core.dataStructures.ObjectCacheBase;
 import jetbrains.exodus.core.dataStructures.Pair;
 import jetbrains.exodus.gc.GarbageCollector;
 import jetbrains.exodus.gc.UtilizationProfile;
+import jetbrains.exodus.io.inMemory.MemoryDataReader;
 import jetbrains.exodus.log.*;
 import jetbrains.exodus.tree.TreeMetaInfo;
 import jetbrains.exodus.tree.btree.BTree;
 import jetbrains.exodus.tree.btree.BTreeBalancePolicy;
 import jetbrains.exodus.util.DeferredIO;
 import jetbrains.exodus.util.IOUtil;
+import kotlin.Unit;
+import kotlin.jvm.functions.Function0;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -57,6 +60,8 @@ public class EnvironmentImpl implements Environment {
     private BTreeBalancePolicy balancePolicy;
     private volatile MetaTree metaTree;
     private final AtomicInteger structureId;
+    @Nullable
+    private final ProcessCoordinator coordinator;
     @NotNull
     private final TransactionSet txns;
     private final LinkedList<RunnableWithTxnRoot> txnSafeTasks;
@@ -88,42 +93,64 @@ public class EnvironmentImpl implements Environment {
 
     @SuppressWarnings({"ThisEscapedInObjectConstruction"})
     EnvironmentImpl(@NotNull final Log log, @NotNull final EnvironmentConfig ec) {
-        log.init();
-
         this.log = log;
         this.ec = ec;
         applyEnvironmentSettings(log.getLocation(), ec);
         final Pair<MetaTree, Integer> meta = MetaTree.create(this);
         metaTree = meta.getFirst();
         structureId = new AtomicInteger(meta.getSecond());
-        txns = new TransactionSet();
-        txnSafeTasks = new LinkedList<>();
-        invalidateStoreGetCache();
-        envSettingsListener = new EnvironmentSettingsListener();
-        ec.addChangedSettingsListener(envSettingsListener);
+        coordinator = log.getConfig().getReader() instanceof MemoryDataReader ? null
+                : ProcessCoordinator.Companion.create(new File(log.getLocation()));
+        try {
+            if (coordinator != null) {
+                coordinator.withHighestRootLock(new Function0<Unit>() {
+                    @Override
+                    public Unit invoke() {
+                        if (coordinator.getHighestRoot() < 0) {
+                            log.init();
+                            coordinator.setHighestRoot(log.approveHighAddress());
+                        } else {
+                            log.setHighAddress(coordinator.getHighestRoot(), false);
+                        }
+                        return Unit.INSTANCE;
+                    }
+                });
+            } else {
+                log.init();
+            }
+            txns = new TransactionSet();
+            txnSafeTasks = new LinkedList<>();
+            invalidateStoreGetCache();
+            envSettingsListener = new EnvironmentSettingsListener();
+            ec.addChangedSettingsListener(envSettingsListener);
 
-        gc = new GarbageCollector(this);
+            gc = new GarbageCollector(this);
 
-        txnDispatcher = new ReentrantTransactionDispatcher(ec.getEnvMaxParallelTxns());
-        roTxnDispatcher = new ReentrantTransactionDispatcher(ec.getEnvMaxParallelReadonlyTxns());
+            txnDispatcher = new ReentrantTransactionDispatcher(ec.getEnvMaxParallelTxns());
+            roTxnDispatcher = new ReentrantTransactionDispatcher(ec.getEnvMaxParallelReadonlyTxns());
 
-        statistics = new EnvironmentStatistics(this);
-        if (ec.isManagementEnabled()) {
-            configMBean = new jetbrains.exodus.env.management.EnvironmentConfig(this);
-            // if we don't gather statistics then we should not expose corresponding managed bean
-            statisticsMBean = ec.getEnvGatherStatistics() ? new jetbrains.exodus.env.management.EnvironmentStatistics(this) : null;
-        } else {
-            configMBean = null;
-            statisticsMBean = null;
-        }
+            statistics = new EnvironmentStatistics(this);
+            if (ec.isManagementEnabled()) {
+                configMBean = new jetbrains.exodus.env.management.EnvironmentConfig(this);
+                // if we don't gather statistics then we should not expose corresponding managed bean
+                statisticsMBean = ec.getEnvGatherStatistics() ? new jetbrains.exodus.env.management.EnvironmentStatistics(this) : null;
+            } else {
+                configMBean = null;
+                statisticsMBean = null;
+            }
 
-        throwableOnCommit = null;
-        throwableOnClose = null;
+            throwableOnCommit = null;
+            throwableOnClose = null;
 
-        stuckTxnMonitor = (transactionTimeout() > 0) ? new StuckTransactionMonitor(this) : null;
+            stuckTxnMonitor = (transactionTimeout() > 0) ? new StuckTransactionMonitor(this) : null;
 
-        if (logger.isInfoEnabled()) {
-            logger.info("Exodus environment created: " + log.getLocation());
+            if (logger.isInfoEnabled()) {
+                logger.info("Exodus environment created: " + log.getLocation());
+            }
+        } finally {
+            if (coordinator != null) {
+                coordinator.close();
+            }
         }
     }
 
@@ -377,6 +404,9 @@ public class EnvironmentImpl implements Environment {
         if (logger.isInfoEnabled()) {
             logger.info("Store get cache hit rate: " + ObjectCacheBase.formatHitRate(storeGetCacheHitRate));
             logger.info("Exodus log cache hit rate: " + ObjectCacheBase.formatHitRate(logCacheHitRate));
+        }
+        if (coordinator != null) {
+            coordinator.close();
         }
     }
 
