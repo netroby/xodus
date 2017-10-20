@@ -5,6 +5,7 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
+import java.nio.channels.FileLock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -13,7 +14,9 @@ private const val VERSION = 1
 private const val UNUSED = -1L
 
 private const val VERSION_SIZE = 4
-private const val HIGHEST_ROOT_OFFSET = VERSION_SIZE
+private const val WRITER_LOCK_OFFSET = VERSION_SIZE
+private const val WRITER_LOCK_SIZE = 1
+private const val HIGHEST_ROOT_OFFSET = WRITER_LOCK_OFFSET + WRITER_LOCK_SIZE
 private const val HIGHEST_ROOT_SIZE = 8
 private const val LOWEST_USED_ROOT_OFFSET = HIGHEST_ROOT_OFFSET + HIGHEST_ROOT_SIZE
 private const val LOWEST_USED_ROOT_SIZE = 8
@@ -29,6 +32,8 @@ class ProcessCoordinator private constructor(
         private val file: CoordinationFile,
         private val slotIndex: Int
 ) : AutoCloseable {
+
+    fun tryAcquireWriterLock() = file.writerLock.tryAcquire()
 
     var highestRoot: Long
         get() = file.highestRoot
@@ -111,9 +116,10 @@ private fun RandomAccessFile.formatCoordinationFile() {
     val buffer = ByteBuffer.allocate(SLOTS_OFFSET)
 
     buffer.putInt(VERSION)
-    buffer.putLong(0)
-    buffer.putLong(UNUSED)
-    buffer.putLong(0)
+    buffer.put(0) // writer lock
+    buffer.putLong(UNUSED) // highest root
+    buffer.putLong(UNUSED) // lowest used root
+    buffer.putLong(0) // reserved slot bitset
 
     setLength(FILE_SIZE.toLong())
     seek(0)
@@ -135,6 +141,7 @@ private fun RandomAccessFile.checkCoordinationFileFormat() {
 
 private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseable {
     private val map = file.channel.map(FileChannel.MapMode.READ_WRITE, 0, FILE_SIZE.toLong())
+    val writerLock = ReentrantFileLock(WRITER_LOCK_OFFSET, WRITER_LOCK_SIZE)
     val highestRootLock = ReentrantFileLock(HIGHEST_ROOT_OFFSET, HIGHEST_ROOT_SIZE)
     val lowestUsedRootAndReservedSlotBitsetLock =
             ReentrantFileLock(LOWEST_USED_ROOT_OFFSET, LOWEST_USED_ROOT_SIZE + RESERVED_SLOT_BITSET_SIZE)
@@ -171,13 +178,13 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         } ?: if (isSlotReserved(slotIndex)) 0L else throw ExodusException("Unreserved slot area is locked in the file"))
     }.inv()
 
-    fun actualizeReservedSlotBitmask() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
+    fun refreshReservedSlotBitmask() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
         reservedSlotBitset = getActuallyReservedSlots()
         recalculateLowestUsedRoot()
     }
 
     fun reserveSlot(): Int = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-        actualizeReservedSlotBitmask()
+        refreshReservedSlotBitmask()
 
         val slotIndex = java.lang.Long.numberOfTrailingZeros(reservedSlotBitset.inv())
         if (slotIndex > NUM_SLOTS) {
@@ -221,23 +228,37 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
 
     inner class ReentrantFileLock(val position: Int, val size: Int) {
         private val synchronizationLock = ReentrantLock()
-        var isLocked = false
-            private set
+        private var fileLock: FileLock? = null
+        val isLocked get() = fileLock != null
 
-        inline fun <R> withLock(optional: Boolean = false, action: () -> R): R = synchronizationLock.withLock {
-            val fileLock = if (optional || isLocked) {
-                null
-            } else {
-                isLocked = true
-                file.channel.lock(position.toLong(), size.toLong(), false)
+        fun acquire() = synchronizationLock.withLock {
+            if (fileLock == null) {
+                fileLock = file.channel.lock(position.toLong(), size.toLong(), false)
+            }
+        }
+
+        fun tryAcquire() = synchronizationLock.withLock {
+            if (fileLock == null) {
+                fileLock = file.channel.tryLock(position.toLong(), size.toLong(), false)
+            }
+            fileLock != null
+        }
+
+        fun release() = synchronizationLock.withLock {
+            fileLock?.let {
+                it.release()
+                fileLock = null
+            }
+        }
+
+        inline fun <R> withLock(optional: Boolean = false, action: () -> R): R {
+            if (!optional) {
+                acquire()
             }
             return try {
                 action()
             } finally {
-                fileLock?.let {
-                    it.release()
-                    isLocked = false
-                }
+                release()
             }
         }
     }
