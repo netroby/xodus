@@ -112,6 +112,11 @@ public class EnvironmentImpl implements Environment {
                         } else {
                             log.setHighAddress(coordinator.getHighestRoot(), false);
                         }
+                        if (!ec.getEnvIsReadonly()) {
+                            if (!coordinator.tryAcquireWriterLock()) {
+                                throw new ExodusException("Unable to acquire writer lock");
+                            }
+                        }
                         return Unit.INSTANCE;
                     }
                 });
