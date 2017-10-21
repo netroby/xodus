@@ -234,6 +234,9 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         fun acquire() = synchronizationLock.withLock {
             if (fileLock == null) {
                 fileLock = file.channel.lock(position.toLong(), size.toLong(), false)
+                true
+            } else {
+                false
             }
         }
 
@@ -252,13 +255,13 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         }
 
         inline fun <R> withLock(optional: Boolean = false, action: () -> R): R {
-            if (!optional) {
-                acquire()
-            }
+            val isAcquired = !optional && acquire()
             return try {
                 action()
             } finally {
-                release()
+                if (isAcquired) {
+                    release()
+                }
             }
         }
     }
