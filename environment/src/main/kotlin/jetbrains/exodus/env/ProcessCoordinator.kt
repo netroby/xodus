@@ -35,11 +35,15 @@ class ProcessCoordinator private constructor(
 
     fun tryAcquireWriterLock() = file.writerLock.tryAcquire()
 
-    var highestRoot: Long
-        get() = file.highestRoot
-        set(value) = file.highestRootLock.withLock {
-            require(value >= highestRoot) { "The new highest root should not be less than the previous" }
-            file.highestRoot = value
+    var highestRoot: Long?
+        get() = file.highestRoot.takeUnless { it == UNUSED }
+        set(value) {
+            file.highestRootLock.withLock {
+                require((value ?: UNUSED) >= file.highestRoot) {
+                    "The new highest root should not be less than the previous"
+                }
+                file.highestRoot = value ?: UNUSED
+            }
         }
 
     val lowestUsedRoot: Long? get() = file.lowestUsedRoot
@@ -61,13 +65,15 @@ class ProcessCoordinator private constructor(
     private fun validateNewLocalLowestUsedRoot(newLocalLowestRoot: Long?) {
         file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
             newLocalLowestRoot?.let {
-                val highestRoot = highestRoot
+                val highestRoot = file.highestRoot
                 require(it <= highestRoot) {
                     "The local lowest root should not be greater than the highest root"
                 }
+                // Anything lower than that might have been garbage collected already
                 require(it >= lowestUsedRoot ?: highestRoot) {
                     "The local lowest root should not be less than the global lowest root"
                 }
+                // Just a sanity check
                 require(it >= localLowestUsedRoot ?: 0) {
                     "The new lowest local root should not be less than the previous"
                 }
