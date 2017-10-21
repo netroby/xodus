@@ -47,10 +47,12 @@ class ProcessCoordinator private constructor(
     var localLowestUsedRoot: Long?
         get() = file.getSlotLowestUsedRoot(slotIndex)
         set(value) = file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
-            file.highestRootLock.withLock(optional = value == null || lowestUsedRoot != null) {
-                validateNewLocalLowestUsedRoot(value)
-                file.setSlotLowestUsedRoot(slotIndex, value)
-                file.recalculateLowestUsedRoot()
+            if (value != localLowestUsedRoot) {
+                file.highestRootLock.withLock(optional = value == null || lowestUsedRoot != null) {
+                    validateNewLocalLowestUsedRoot(value)
+                    file.setSlotLowestUsedRoot(slotIndex, value)
+                    file.recalculateLowestUsedRoot()
+                }
             }
         }
 
