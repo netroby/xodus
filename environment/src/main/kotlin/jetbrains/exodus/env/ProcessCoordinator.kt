@@ -54,7 +54,7 @@ class ProcessCoordinator private constructor(
             }
         }
 
-    fun withHighestRootLock(action: () -> Unit) = file.highestRootLock.withLock { action() }
+    fun <T> withHighestRootLock(action: () -> T) = file.highestRootLock.withLock { action() }
 
     private fun validateNewLocalLowestUsedRoot(newLocalLowestRoot: Long?) {
         file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
