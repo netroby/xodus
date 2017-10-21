@@ -38,6 +38,7 @@ class ProcessCoordinator private constructor(
     var highestRoot: Long?
         get() = file.highestRoot.takeUnless { it == UNUSED }
         set(value) {
+            require(value == null || value >= 0) { "The highest root should not be negative" }
             file.highestRootLock.withLock {
                 require((value ?: UNUSED) >= file.highestRoot) {
                     "The new highest root should not be less than the previous"
@@ -50,12 +51,15 @@ class ProcessCoordinator private constructor(
 
     var localLowestUsedRoot: Long?
         get() = file.getSlotLowestUsedRoot(slotIndex)
-        set(value) = file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
-            if (value != localLowestUsedRoot) {
-                file.highestRootLock.withLock(optional = value == null || lowestUsedRoot != null) {
-                    validateNewLocalLowestUsedRoot(value)
-                    file.setSlotLowestUsedRoot(slotIndex, value)
-                    file.recalculateLowestUsedRoot()
+        set(value) {
+            require(value == null || value >= 0) { "The local lowest root should not be negative" }
+            file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
+                if (value != localLowestUsedRoot) {
+                    file.highestRootLock.withLock(optional = value == null || lowestUsedRoot != null) {
+                        validateNewLocalLowestUsedRoot(value)
+                        file.setSlotLowestUsedRoot(slotIndex, value)
+                        file.recalculateLowestUsedRoot()
+                    }
                 }
             }
         }
