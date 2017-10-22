@@ -100,7 +100,7 @@ public class EnvironmentImpl implements Environment {
         metaTree = meta.getFirst();
         structureId = new AtomicInteger(meta.getSecond());
         coordinator = log.getConfig().getReader() instanceof MemoryDataReader ? null
-                : ProcessCoordinator.Companion.create(new File(log.getLocation()));
+                : FileBasedProcessCoordinator.Companion.create(new File(log.getLocation()));
         try {
             if (coordinator != null) {
                 coordinator.withHighestRootLock(new Function0<Unit>() {
