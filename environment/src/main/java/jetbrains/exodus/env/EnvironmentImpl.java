@@ -106,7 +106,7 @@ public class EnvironmentImpl implements Environment {
                 coordinator.withHighestRootLock(new Function0<Unit>() {
                     @Override
                     public Unit invoke() {
-                        if (coordinator.getHighestRoot() < 0) {
+                        if (coordinator.getHighestRoot() == null) {
                             log.init();
                             coordinator.setHighestRoot(log.approveHighAddress());
                         } else {
@@ -152,10 +152,11 @@ public class EnvironmentImpl implements Environment {
             if (logger.isInfoEnabled()) {
                 logger.info("Exodus environment created: " + log.getLocation());
             }
-        } finally {
+        } catch (Throwable e) {
             if (coordinator != null) {
                 coordinator.close();
             }
+            throw e;
         }
     }
 
