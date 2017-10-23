@@ -64,7 +64,7 @@ public class EnvironmentImpl implements Environment {
     private final ProcessCoordinator coordinator;
     @NotNull
     private final TransactionSet txns;
-    private final LinkedList<RunnableWithTxnRoot> txnSafeTasks;
+    private final LinkedList<RunnableWithTxnHighAddress> txnSafeTasks;
     @Nullable
     private StoreGetCache storeGetCache;
     private final EnvironmentSettingsListener envSettingsListener;
@@ -305,12 +305,12 @@ public class EnvironmentImpl implements Environment {
 
     @Override
     public void executeTransactionSafeTask(@NotNull final Runnable task) {
-        final long newestTxnRoot = txns.getNewestTxnRootAddress();
-        if (newestTxnRoot == Long.MIN_VALUE) {
+        final long newestTxnHighAddress = txns.getNewestTxnHighAddress();
+        if (newestTxnHighAddress == Long.MIN_VALUE) {
             task.run();
         } else {
             synchronized (txnSafeTasks) {
-                txnSafeTasks.addLast(new RunnableWithTxnRoot(task, newestTxnRoot));
+                txnSafeTasks.addLast(new RunnableWithTxnHighAddress(task, newestTxnHighAddress));
             }
         }
     }
@@ -722,12 +722,12 @@ public class EnvironmentImpl implements Environment {
     void runTransactionSafeTasks() {
         if (throwableOnCommit == null) {
             List<Runnable> tasksToRun = null;
-            final long oldestTxnRoot = txns.getOldestTxnRootAddress();
+            final long oldestTxnHighAddress = txns.getOldestTxnHighAddress();
             synchronized (txnSafeTasks) {
                 while (true) {
                     if (!txnSafeTasks.isEmpty()) {
-                        final RunnableWithTxnRoot r = txnSafeTasks.getFirst();
-                        if (r.txnRoot < oldestTxnRoot) {
+                        final RunnableWithTxnHighAddress r = txnSafeTasks.getFirst();
+                        if (r.txnHighAddress < oldestTxnHighAddress) {
                             txnSafeTasks.removeFirst();
                             if (tasksToRun == null) {
                                 tasksToRun = new ArrayList<>(4);
@@ -794,7 +794,7 @@ public class EnvironmentImpl implements Environment {
     private void runAllTransactionSafeTasks() {
         if (throwableOnCommit == null) {
             synchronized (txnSafeTasks) {
-                for (final RunnableWithTxnRoot r : txnSafeTasks) {
+                for (final RunnableWithTxnHighAddress r : txnSafeTasks) {
                     r.runnable.run();
                 }
             }
@@ -1030,14 +1030,14 @@ public class EnvironmentImpl implements Environment {
         }
     }
 
-    private static class RunnableWithTxnRoot {
+    private static class RunnableWithTxnHighAddress {
 
         private final Runnable runnable;
-        private final long txnRoot;
+        private final long txnHighAddress;
 
-        private RunnableWithTxnRoot(Runnable runnable, long txnRoot) {
+        private RunnableWithTxnHighAddress(Runnable runnable, long txnHighAddress) {
             this.runnable = runnable;
-            this.txnRoot = txnRoot;
+            this.txnHighAddress = txnHighAddress;
         }
     }
 }

@@ -37,7 +37,7 @@ final class TransactionSet {
     }
 
     void add(@NotNull final TransactionBase txn) {
-        final Snapshot snapshot = new Snapshot(txn, txn.getRoot());
+        final Snapshot snapshot = new Snapshot(txn, txn.getHighAddress());
         for (; ; ) {
             final MinMaxAwareSnapshotSet prevSet = snapshots.get();
             final PersistentHashSet<Snapshot> newSet = prevSet.set.getClone();
@@ -48,8 +48,8 @@ final class TransactionSet {
             }
             final Snapshot prevMin = prevSet.min;
             final Snapshot prevMax = prevSet.max;
-            final Snapshot newMin = prevMin != null && prevMin.root > snapshot.root ? snapshot : prevMin;
-            final Snapshot newMax = prevMax != null && prevMax.root < snapshot.root ? snapshot : prevMax;
+            final Snapshot newMin = prevMin != null && prevMin.highAddress > snapshot.highAddress ? snapshot : prevMin;
+            final Snapshot newMax = prevMax != null && prevMax.highAddress < snapshot.highAddress ? snapshot : prevMax;
             if (this.snapshots.compareAndSet(prevSet, new MinMaxAwareSnapshotSet(newSet, newMin, newMax))) {
                 break;
             }
@@ -85,14 +85,14 @@ final class TransactionSet {
         return getCurrent().size();
     }
 
-    long getOldestTxnRootAddress() {
+    long getOldestTxnHighAddress() {
         final Snapshot oldestSnapshot = snapshots.get().getMin();
-        return oldestSnapshot == null ? Long.MAX_VALUE : oldestSnapshot.root;
+        return oldestSnapshot == null ? Long.MAX_VALUE : oldestSnapshot.highAddress;
     }
 
-    long getNewestTxnRootAddress() {
+    long getNewestTxnHighAddress() {
         final Snapshot newestSnapshot = snapshots.get().getMax();
-        return newestSnapshot == null ? Long.MIN_VALUE : newestSnapshot.root;
+        return newestSnapshot == null ? Long.MIN_VALUE : newestSnapshot.highAddress;
     }
 
     @NotNull
@@ -125,7 +125,7 @@ final class TransactionSet {
             if (min == null) {
                 Snapshot min = null;
                 for (final Snapshot snapshot : set) {
-                    if (min == null || snapshot.root < min.root) {
+                    if (min == null || snapshot.highAddress < min.highAddress) {
                         min = snapshot;
                     }
                 }
@@ -139,7 +139,7 @@ final class TransactionSet {
             if (max == null) {
                 Snapshot max = null;
                 for (final Snapshot snapshot : set) {
-                    if (max == null || snapshot.root > max.root) {
+                    if (max == null || snapshot.highAddress > max.highAddress) {
                         max = snapshot;
                     }
                 }
@@ -153,16 +153,16 @@ final class TransactionSet {
 
         @NotNull
         final Transaction txn;
-        final long root;
+        final long highAddress;
 
-        Snapshot(@NotNull Transaction txn, long root) {
+        Snapshot(@NotNull Transaction txn, long highAddress) {
             this.txn = txn;
-            this.root = root;
+            this.highAddress = highAddress;
         }
 
         @Override
         public boolean equals(Object other) {
-            return this == other || other instanceof Snapshot && txn.equals(((Snapshot)other).txn);
+            return this == other || other instanceof Snapshot && txn.equals(((Snapshot) other).txn);
         }
 
         @Override
