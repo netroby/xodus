@@ -601,11 +601,18 @@ public class EnvironmentImpl implements Environment {
             try {
                 initialHighAddress = log.getHighAddress();
                 try {
-                    expiredLoggables = txn.doCommit();
-                    // there is a temptation to postpone I/O in order to reduce number of writes to storage device,
-                    // but it's quite difficult to resolve all possible inconsistencies afterwards,
-                    // so think twice before removing the following line
-                    log.flush();
+                    expiredLoggables = coordinator.withHighestRootLock(new Function0<Iterable<ExpiredLoggableInfo>[]>() {
+                        @Override
+                        public Iterable<ExpiredLoggableInfo>[] invoke() {
+                            final Iterable<ExpiredLoggableInfo>[] expiredLoggables = txn.doCommit();
+                            // there is a temptation to postpone I/O in order to reduce number of writes to storage device,
+                            // but it's quite difficult to resolve all possible inconsistencies afterwards,
+                            // so think twice before removing the following line
+                            log.flush();
+                            coordinator.setHighestRoot(log.approveHighAddress());
+                            return expiredLoggables;
+                        }
+                    });
                     metaTree = txn.getMetaTree();
                     txn.executeCommitHook();
                     resultingHighAddress = log.approveHighAddress();
