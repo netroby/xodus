@@ -95,6 +95,11 @@ class FileBasedProcessCoordinator private constructor(
 
     companion object {
         fun create(databaseLocation: File): FileBasedProcessCoordinator {
+            if (!databaseLocation.exists()) {
+                if (!databaseLocation.mkdirs()) {
+                    throw ExodusException("Cannot create database directory: " + databaseLocation)
+                }
+            }
             val file = RandomAccessFile(File(databaseLocation, FILE_NAME), "rw")
 
             return file.lockVersion().use {
