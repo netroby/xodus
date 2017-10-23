@@ -20,9 +20,9 @@ import jetbrains.exodus.ExodusException;
 import jetbrains.exodus.backup.BackupStrategy;
 import jetbrains.exodus.core.dataStructures.ObjectCacheBase;
 import jetbrains.exodus.core.dataStructures.Pair;
+import jetbrains.exodus.env.management.EnvironmentConfigWithOperations;
 import jetbrains.exodus.gc.GarbageCollector;
 import jetbrains.exodus.gc.UtilizationProfile;
-import jetbrains.exodus.io.inMemory.MemoryDataReader;
 import jetbrains.exodus.log.*;
 import jetbrains.exodus.tree.TreeMetaInfo;
 import jetbrains.exodus.tree.btree.BTree;
@@ -134,7 +134,9 @@ public class EnvironmentImpl implements Environment {
 
             statistics = new EnvironmentStatistics(this);
             if (ec.isManagementEnabled()) {
-                configMBean = new jetbrains.exodus.env.management.EnvironmentConfig(this);
+                configMBean = ec.getManagementOperationsRestricted() ?
+                    new jetbrains.exodus.env.management.EnvironmentConfig(this) :
+                    new EnvironmentConfigWithOperations(this);
                 // if we don't gather statistics then we should not expose corresponding managed bean
                 statisticsMBean = ec.getEnvGatherStatistics() ? new jetbrains.exodus.env.management.EnvironmentStatistics(this) : null;
             } else {
