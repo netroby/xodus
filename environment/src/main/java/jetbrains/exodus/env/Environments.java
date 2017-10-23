@@ -15,6 +15,8 @@
  */
 package jetbrains.exodus.env;
 
+import jetbrains.exodus.io.DataReader;
+import jetbrains.exodus.io.FileDataReader;
 import jetbrains.exodus.log.Log;
 import jetbrains.exodus.log.LogConfig;
 import org.jetbrains.annotations.NotNull;
@@ -29,7 +31,7 @@ public final class Environments {
 
     @NotNull
     public static Environment newInstance(@NotNull final String dir, @NotNull final String subDir, @NotNull final EnvironmentConfig ec) {
-        return prepare(new EnvironmentImpl(newLogInstance(new File(dir, subDir), ec), ec));
+        return newInstance(new File(dir, subDir), ec);
     }
 
     @NotNull
@@ -39,7 +41,7 @@ public final class Environments {
 
     @NotNull
     public static Environment newInstance(@NotNull final String dir, @NotNull final EnvironmentConfig ec) {
-        return prepare(new EnvironmentImpl(newLogInstance(new File(dir), ec), ec));
+        return newInstance(new File(dir), ec);
     }
 
     @NotNull
@@ -49,7 +51,7 @@ public final class Environments {
 
     @NotNull
     public static Environment newInstance(@NotNull final File dir, @NotNull final EnvironmentConfig ec) {
-        return prepare(new EnvironmentImpl(newLogInstance(dir, ec), ec));
+        return newInstance(new LogConfig().setDir(dir), ec);
     }
 
     @NotNull
@@ -59,12 +61,18 @@ public final class Environments {
 
     @NotNull
     public static Environment newInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec) {
-        return prepare(new EnvironmentImpl(newLogInstance(config, ec), ec));
+        final ProcessCoordinator coordinator = getProcessCoordinator(config);
+        return newInstance(config, ec, coordinator);
+    }
+
+    @NotNull
+    public static Environment newInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec, @NotNull final ProcessCoordinator coordinator) {
+        return prepare(new EnvironmentImpl(newLogInstance(config, ec), ec, coordinator));
     }
 
     @NotNull
     public static ContextualEnvironment newContextualInstance(@NotNull final String dir, @NotNull final String subDir, @NotNull final EnvironmentConfig ec) {
-        return prepare(new ContextualEnvironmentImpl(newLogInstance(new File(dir, subDir), ec), ec));
+        return newContextualInstance(new File(dir, subDir), ec);
     }
 
     @NotNull
@@ -74,7 +82,7 @@ public final class Environments {
 
     @NotNull
     public static ContextualEnvironment newContextualInstance(@NotNull final String dir, @NotNull final EnvironmentConfig ec) {
-        return prepare(new ContextualEnvironmentImpl(newLogInstance(new File(dir), ec), ec));
+        return newContextualInstance(new File(dir), ec);
     }
 
     @NotNull
@@ -84,12 +92,18 @@ public final class Environments {
 
     @NotNull
     public static ContextualEnvironment newContextualInstance(@NotNull final File dir, @NotNull final EnvironmentConfig ec) {
-        return prepare(new ContextualEnvironmentImpl(newLogInstance(dir, ec), ec));
+        return newContextualInstance(new LogConfig().setDir(dir), ec);
     }
 
     @NotNull
     public static ContextualEnvironment newContextualInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec) {
-        return prepare(new ContextualEnvironmentImpl(newLogInstance(config, ec), ec));
+        final ProcessCoordinator coordinator = getProcessCoordinator(config);
+        return newContextualInstance(config, ec, coordinator);
+    }
+
+    @NotNull
+    public static ContextualEnvironment newContextualInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec, @NotNull final ProcessCoordinator coordinator) {
+        return prepare(new ContextualEnvironmentImpl(newLogInstance(config, ec), ec, coordinator));
     }
 
     @NotNull
@@ -131,5 +145,13 @@ public final class Environments {
     static <T extends EnvironmentImpl> T prepare(@NotNull final T env) {
         env.getGC().getUtilizationProfile().load();
         return env;
+    }
+
+    @NotNull
+    private static ProcessCoordinator getProcessCoordinator(@NotNull LogConfig config) {
+        final DataReader reader = config.getReader();
+        return reader instanceof FileDataReader
+                ? FileBasedProcessCoordinator.Companion.create(((FileDataReader) reader).getDir())
+                : new DummyProcessCoordinator();
     }
 }

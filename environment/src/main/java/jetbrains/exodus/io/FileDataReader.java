@@ -60,6 +60,11 @@ public class FileDataReader implements DataReader {
         }
     }
 
+    @NotNull
+    public File getDir() {
+        return dir;
+    }
+
     @Override
     public Block[] getBlocks() {
         final File[] files = LogUtil.listFiles(dir);

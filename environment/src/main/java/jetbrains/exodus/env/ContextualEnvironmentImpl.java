@@ -31,8 +31,8 @@ public class ContextualEnvironmentImpl extends EnvironmentImpl implements Contex
 
     private final Map<Thread, Deque<TransactionBase>> threadTxns = new ConcurrentHashMap<>(4, 0.75f, 4);
 
-    ContextualEnvironmentImpl(@NotNull Log log, @NotNull EnvironmentConfig ec) {
-        super(log, ec);
+    ContextualEnvironmentImpl(@NotNull Log log, @NotNull EnvironmentConfig ec, @NotNull final ProcessCoordinator coordinator) {
+        super(log, ec, coordinator);
     }
 
     @Override

@@ -60,7 +60,7 @@ public class EnvironmentImpl implements Environment {
     private BTreeBalancePolicy balancePolicy;
     private volatile MetaTree metaTree;
     private final AtomicInteger structureId;
-    @Nullable
+    @NotNull
     private final ProcessCoordinator coordinator;
     @NotNull
     private final TransactionSet txns;
@@ -92,38 +92,33 @@ public class EnvironmentImpl implements Environment {
     private final StuckTransactionMonitor stuckTxnMonitor;
 
     @SuppressWarnings({"ThisEscapedInObjectConstruction"})
-    EnvironmentImpl(@NotNull final Log log, @NotNull final EnvironmentConfig ec) {
+    EnvironmentImpl(@NotNull final Log log, @NotNull final EnvironmentConfig ec,
+                    @NotNull final ProcessCoordinator coordinator) {
         this.log = log;
         this.ec = ec;
         applyEnvironmentSettings(log.getLocation(), ec);
         final Pair<MetaTree, Integer>[] meta = new Pair[1];
-        coordinator = log.getConfig().getReader() instanceof MemoryDataReader ? null
-                : FileBasedProcessCoordinator.Companion.create(new File(log.getLocation()));
+        this.coordinator = coordinator;
         try {
-            if (coordinator != null) {
-                coordinator.withHighestRootLock(new Function0<Unit>() {
-                    @Override
-                    public Unit invoke() {
-                        if (coordinator.getHighestRoot() == null) {
-                            log.init();
-                            meta[0] = MetaTree.create(EnvironmentImpl.this);
-                            coordinator.setHighestRoot(log.approveHighAddress());
-                        } else {
-                            log.setHighAddress(coordinator.getHighestRoot(), false);
-                            meta[0] = MetaTree.createWithoutRecovery(EnvironmentImpl.this);
-                        }
-                        if (!ec.getEnvIsReadonly()) {
-                            if (!coordinator.tryAcquireWriterLock()) {
-                                throw new ExodusException("Unable to acquire writer lock");
-                            }
-                        }
-                        return Unit.INSTANCE;
+            coordinator.withHighestRootLock(new Function0<Unit>() {
+                @Override
+                public Unit invoke() {
+                    if (coordinator.getHighestRoot() == null) {
+                        log.init();
+                        meta[0] = MetaTree.create(EnvironmentImpl.this);
+                        coordinator.setHighestRoot(log.approveHighAddress());
+                    } else {
+                        log.setHighAddress(coordinator.getHighestRoot(), false);
+                        meta[0] = MetaTree.createWithoutRecovery(EnvironmentImpl.this);
                     }
-                });
-            } else {
-                log.init();
-                meta[0] = MetaTree.create(EnvironmentImpl.this);
-            }
+                    if (!ec.getEnvIsReadonly()) {
+                        if (!coordinator.tryAcquireWriterLock()) {
+                            throw new ExodusException("Unable to acquire writer lock");
+                        }
+                    }
+                    return Unit.INSTANCE;
+                }
+            });
             metaTree = meta[0].getFirst();
             structureId = new AtomicInteger(meta[0].getSecond());
             txns = new TransactionSet();
@@ -156,9 +151,7 @@ public class EnvironmentImpl implements Environment {
                 logger.info("Exodus environment created: " + log.getLocation());
             }
         } catch (Throwable e) {
-            if (coordinator != null) {
-                coordinator.close();
-            }
+            coordinator.close();
             throw e;
         }
     }
@@ -414,9 +407,7 @@ public class EnvironmentImpl implements Environment {
             logger.info("Store get cache hit rate: " + ObjectCacheBase.formatHitRate(storeGetCacheHitRate));
             logger.info("Exodus log cache hit rate: " + ObjectCacheBase.formatHitRate(logCacheHitRate));
         }
-        if (coordinator != null) {
-            coordinator.close();
-        }
+        coordinator.close();
     }
 
     @Override
