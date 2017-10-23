@@ -122,6 +122,7 @@ public class EnvironmentImpl implements Environment {
                 });
             } else {
                 log.init();
+                meta[0] = MetaTree.create(EnvironmentImpl.this);
             }
             metaTree = meta[0].getFirst();
             structureId = new AtomicInteger(meta[0].getSecond());
