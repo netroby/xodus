@@ -96,9 +96,7 @@ public class EnvironmentImpl implements Environment {
         this.log = log;
         this.ec = ec;
         applyEnvironmentSettings(log.getLocation(), ec);
-        final Pair<MetaTree, Integer> meta = MetaTree.create(this);
-        metaTree = meta.getFirst();
-        structureId = new AtomicInteger(meta.getSecond());
+        final Pair<MetaTree, Integer>[] meta = new Pair[1];
         coordinator = log.getConfig().getReader() instanceof MemoryDataReader ? null
                 : FileBasedProcessCoordinator.Companion.create(new File(log.getLocation()));
         try {
@@ -108,9 +106,11 @@ public class EnvironmentImpl implements Environment {
                     public Unit invoke() {
                         if (coordinator.getHighestRoot() == null) {
                             log.init();
+                            meta[0] = MetaTree.create(EnvironmentImpl.this);
                             coordinator.setHighestRoot(log.approveHighAddress());
                         } else {
                             log.setHighAddress(coordinator.getHighestRoot(), false);
+                            meta[0] = MetaTree.createWithoutRecovery(EnvironmentImpl.this);
                         }
                         if (!ec.getEnvIsReadonly()) {
                             if (!coordinator.tryAcquireWriterLock()) {
@@ -123,6 +123,8 @@ public class EnvironmentImpl implements Environment {
             } else {
                 log.init();
             }
+            metaTree = meta[0].getFirst();
+            structureId = new AtomicInteger(meta[0].getSecond());
             txns = new TransactionSet();
             txnSafeTasks = new LinkedList<>();
             invalidateStoreGetCache();

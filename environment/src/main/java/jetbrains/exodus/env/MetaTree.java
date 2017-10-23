@@ -89,6 +89,29 @@ final class MetaTree {
         return new Pair<>(new MetaTree(resultTree, root, log.getHighAddress()), EnvironmentImpl.META_TREE_ID);
     }
 
+    static Pair<MetaTree, Integer> createWithoutRecovery(@NotNull final EnvironmentImpl env) {
+        final Log log = env.getLog();
+        final Loggable rootLoggable = log.getLastLoggableOfType(DatabaseRoot.DATABASE_ROOT_TYPE);
+        if (rootLoggable == null) {
+            throw new ExodusException("Database root is not found");
+        }
+        final DatabaseRoot dbRoot = new DatabaseRoot(rootLoggable);
+        if (!dbRoot.isValid()) {
+            throw new ExodusException("Database root is not valid");
+        }
+        final long root = dbRoot.getAddress();
+        final long validHighAddress = root + dbRoot.length();
+        if (log.getHighAddress() != validHighAddress) {
+            throw new ExodusException("Log high address is not valid");
+        }
+        final BTree metaTree = env.loadMetaTree(dbRoot.getRootAddress());
+        if (metaTree == null) {
+            throw new ExodusException("Failed to load meta tree");
+        }
+        cloneTree(metaTree); // try to traverse meta tree
+        return new Pair<>(new MetaTree(metaTree, root, validHighAddress), dbRoot.getLastStructureId());
+    }
+
     LongIterator addressIterator() {
         return tree.addressIterator();
     }
