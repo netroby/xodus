@@ -506,9 +506,11 @@ public class EnvironmentImpl implements Environment {
 
     protected void finishTransaction(@NotNull final TransactionBase txn) {
         releaseTransaction(txn);
-        txns.remove(txn);
-        long lowAddress = txns.getOldestTxnHighAddress();
-        coordinator.setLocalLowestUsedRoot(lowAddress == Long.MAX_VALUE ? null : lowAddress);
+        synchronized (txns) {
+            txns.remove(txn);
+            long oldestTxnHighAddress = txns.getOldestTxnHighAddress();
+            coordinator.setLocalLowestUsedRoot(oldestTxnHighAddress == Long.MAX_VALUE ? null : oldestTxnHighAddress);
+        }
         txn.setIsFinished();
         runTransactionSafeTasks();
     }
@@ -711,11 +713,14 @@ public class EnvironmentImpl implements Environment {
         return structureId.get();
     }
 
-    void registerTransaction(@NotNull final TransactionBase txn) {
+    void registerTransaction(@NotNull final TransactionBase txn, @Nullable final MetaTree metaTree) {
         checkIfTransactionCreatedAgainstThis(txn);
-        // N.B! due to TransactionImpl.revert(), there can appear a txn which is already in the transaction set
-        // any implementation of transaction set should process this well
-        txns.add(txn);
+        synchronized (txns) {
+            txn.setMetaTree(metaTree == null ? getMetaTree() : metaTree);
+            // N.B! due to TransactionImpl.revert(), there can appear a txn which is already in the transaction set
+            // any implementation of transaction set should process this well
+            txns.add(txn);
+        }
     }
 
     int activeTransactions() {

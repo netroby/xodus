@@ -23,17 +23,16 @@ import static jetbrains.exodus.env.EnvironmentStatistics.Type.READONLY_TRANSACTI
 public class ReadonlyTransaction extends TransactionBase {
 
     public ReadonlyTransaction(@NotNull final EnvironmentImpl env, @Nullable final Runnable beginHook) {
-        this(env, env.getMetaTree());
+        this(env, (MetaTree) null);
         if (beginHook != null) {
             beginHook.run();
         }
     }
 
-    ReadonlyTransaction(@NotNull final EnvironmentImpl env, @NotNull MetaTree metaTree) {
+    ReadonlyTransaction(@NotNull final EnvironmentImpl env, @Nullable MetaTree metaTree) {
         super(env, false);
-        setMetaTree(metaTree);
         env.acquireTransaction(this);
-        env.registerTransaction(this);
+        env.registerTransaction(this, metaTree);
         env.getStatistics().getStatisticsItem(READONLY_TRANSACTIONS).incTotal();
     }
 

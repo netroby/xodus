@@ -47,14 +47,14 @@ public class ReadWriteTransaction extends TransactionBase {
     ReadWriteTransaction(@NotNull final EnvironmentImpl env,
                          @Nullable final Runnable beginHook,
                          final boolean isExclusive) {
-        this(env, env.getMetaTree(), beginHook, isExclusive);
+        this(env, null, beginHook, isExclusive);
         if (beginHook != null) {
             beginHook.run();
         }
     }
 
     ReadWriteTransaction(@NotNull final EnvironmentImpl env,
-                         @NotNull final MetaTree metaTree,
+                         @Nullable final MetaTree metaTree,
                          @Nullable final Runnable beginHook,
                          final boolean isExclusive) {
         super(env, isExclusive);
@@ -63,10 +63,9 @@ public class ReadWriteTransaction extends TransactionBase {
         removedStores = new LongHashMap<>();
         createdStores = new HashMapDecorator<>();
         replayCount = 0;
-        setMetaTree(metaTree);
         setExclusive(isExclusive || env.shouldTransactionBeExclusive(this));
         env.acquireTransaction(this);
-        env.registerTransaction(this);
+        env.registerTransaction(this, metaTree);
         env.getStatistics().getStatisticsItem(TRANSACTIONS).incTotal();
     }
 
@@ -126,8 +125,7 @@ public class ReadWriteTransaction extends TransactionBase {
                 env.acquireTransaction(this);
             }
         }
-        setMetaTree(env.getMetaTree());
-        env.registerTransaction(this);
+        env.registerTransaction(this, null);
         if (beginHook != null) {
             beginHook.run();
         }
