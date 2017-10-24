@@ -114,6 +114,9 @@ public class ReadWriteTransaction extends TransactionBase {
     @Override
     public void revert() {
         checkIsFinished();
+        if (isReadonly()) {
+            throw new ExodusException("Attempt ot revert read-only transaction");
+        }
         final long oldRoot = getMetaTree().root;
         final boolean wasExclusive = isExclusive();
         final EnvironmentImpl env = getEnvironment();
@@ -128,6 +131,9 @@ public class ReadWriteTransaction extends TransactionBase {
         env.registerTransaction(this, null);
         if (beginHook != null) {
             beginHook.run();
+        }
+        if (!env.isRegistered(this)) {
+            throw new ExodusException("Transaction should remain registered after revert");
         }
         if (!checkVersion(oldRoot)) {
             clearImmutableTrees();

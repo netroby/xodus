@@ -724,6 +724,11 @@ public class EnvironmentImpl implements Environment {
         }
     }
 
+    boolean isRegistered(@NotNull final ReadWriteTransaction txn) {
+        checkIfTransactionCreatedAgainstThis(txn);
+        return txns.contains(txn);
+    }
+
     int activeTransactions() {
         return txns.size();
     }
