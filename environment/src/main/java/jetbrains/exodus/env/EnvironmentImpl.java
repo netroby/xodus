@@ -725,7 +725,8 @@ public class EnvironmentImpl implements Environment {
     void runTransactionSafeTasks() {
         if (throwableOnCommit == null) {
             List<Runnable> tasksToRun = null;
-            final long oldestTxnHighAddress = txns.getOldestTxnHighAddress();
+            Long lowAddress = coordinator.getLowestUsedRoot();
+            final long oldestTxnHighAddress = lowAddress == null ? Long.MAX_VALUE : lowAddress;
             synchronized (txnSafeTasks) {
                 while (true) {
                     if (!txnSafeTasks.isEmpty()) {
