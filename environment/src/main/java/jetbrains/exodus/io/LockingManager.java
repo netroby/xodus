@@ -33,7 +33,7 @@ import java.util.Scanner;
  */
 public class LockingManager {
 
-    private static final String LOCK_FILE_NAME = "xd.lck";
+    public static final String LOCK_FILE_NAME = "xd.lck";
 
     @NotNull
     private final File dir;
