@@ -507,6 +507,8 @@ public class EnvironmentImpl implements Environment {
     protected void finishTransaction(@NotNull final TransactionBase txn) {
         releaseTransaction(txn);
         txns.remove(txn);
+        long lowAddress = txns.getOldestTxnHighAddress();
+        coordinator.setLocalLowestUsedRoot(lowAddress == Long.MAX_VALUE ? null : lowAddress);
         txn.setIsFinished();
         runTransactionSafeTasks();
     }
