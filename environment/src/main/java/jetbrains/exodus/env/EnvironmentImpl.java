@@ -720,6 +720,7 @@ public class EnvironmentImpl implements Environment {
             // N.B! due to TransactionImpl.revert(), there can appear a txn which is already in the transaction set
             // any implementation of transaction set should process this well
             txns.add(txn);
+            coordinator.setLocalLowestUsedRoot(txns.getOldestTxnHighAddress());
         }
     }
 
