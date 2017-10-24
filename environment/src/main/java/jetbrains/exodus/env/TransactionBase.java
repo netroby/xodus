@@ -65,13 +65,13 @@ public abstract class TransactionBase implements Transaction {
     @Override
     public Transaction getSnapshot(@Nullable final Runnable beginHook) {
         checkIsFinished();
-        return new ReadWriteTransaction(env, metaTree, beginHook, false);
+        return new ReadWriteTransaction(this, beginHook);
     }
 
     @Override
     public Transaction getReadonlySnapshot() {
         checkIsFinished();
-        return new ReadonlyTransaction(env, metaTree);
+        return new ReadonlyTransaction(this);
     }
 
     @Override
@@ -185,6 +185,9 @@ public abstract class TransactionBase implements Transaction {
         this.acquiredPermits = acquiredPermits;
     }
 
+    @Nullable
+    abstract Runnable getBeginHook();
+
     protected void clearImmutableTrees() {
         synchronized (immutableTrees) {
             immutableTrees.clear();
@@ -203,5 +206,20 @@ public abstract class TransactionBase implements Transaction {
 
     protected void setIsFinished() {
         isFinished = true;
+    }
+
+    protected Runnable getWrappedBeginHook(@Nullable final Runnable beginHook) {
+        return new Runnable() {
+            @Override
+            public void run() {
+                final EnvironmentImpl env = getEnvironment();
+                setMetaTree(env.getMetaTree());
+                env.registerTransaction(TransactionBase.this);
+                if (beginHook != null) {
+                    beginHook.run();
+                }
+
+            }
+        };
     }
 }

@@ -100,8 +100,8 @@ public class ContextualEnvironmentImpl extends EnvironmentImpl implements Contex
 
     @NotNull
     @Override
-    protected TransactionBase beginTransaction(Runnable beginHook, boolean exclusive) {
-        final TransactionBase result = super.beginTransaction(beginHook, exclusive);
+    protected TransactionBase beginTransaction(Runnable beginHook, boolean exclusive, boolean cloneMeta) {
+        final TransactionBase result = super.beginTransaction(beginHook, exclusive, cloneMeta);
         setCurrentTransaction(result);
         return result;
     }
