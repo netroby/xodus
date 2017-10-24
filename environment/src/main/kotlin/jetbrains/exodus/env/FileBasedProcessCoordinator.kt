@@ -2,6 +2,7 @@ package jetbrains.exodus.env
 
 import jetbrains.exodus.ExodusException
 import jetbrains.exodus.io.LockingManager
+import org.agrona.concurrent.UnsafeBuffer
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -13,9 +14,10 @@ import kotlin.concurrent.withLock
 private const val VERSION = 1
 private const val UNUSED = -1L
 
+// The offsets should be 4-byte aligned for volatile reads/writes
 private const val VERSION_SIZE = 4
 private const val WRITER_LOCK_OFFSET = VERSION_SIZE
-private const val WRITER_LOCK_SIZE = 1
+private const val WRITER_LOCK_SIZE = 4
 private const val HIGHEST_ROOT_OFFSET = WRITER_LOCK_OFFSET + WRITER_LOCK_SIZE
 private const val HIGHEST_ROOT_SIZE = 8
 private const val LOWEST_USED_ROOT_OFFSET = HIGHEST_ROOT_OFFSET + HIGHEST_ROOT_SIZE
@@ -157,36 +159,38 @@ private fun RandomAccessFile.checkCoordinationFileFormat() {
 }
 
 private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseable {
-    private val map = file.channel.map(FileChannel.MapMode.READ_WRITE, 0, FILE_SIZE.toLong())
+    private val map = UnsafeBuffer(file.channel.map(FileChannel.MapMode.READ_WRITE, 0, FILE_SIZE.toLong()))
     val writerLock = ReentrantFileLock(WRITER_LOCK_OFFSET, WRITER_LOCK_SIZE)
     val highestRootLock = ReentrantFileLock(HIGHEST_ROOT_OFFSET, HIGHEST_ROOT_SIZE)
     val lowestUsedRootAndReservedSlotBitsetLock =
             ReentrantFileLock(LOWEST_USED_ROOT_OFFSET, LOWEST_USED_ROOT_SIZE + RESERVED_SLOT_BITSET_SIZE)
 
     var highestRoot: Long
-        inline get() = highestRootLock.withLock { map.getLong(HIGHEST_ROOT_OFFSET) }
-        inline set(value) = highestRootLock.withLock { map.putLong(HIGHEST_ROOT_OFFSET, value) }
+        inline get() = highestRootLock.withLock { map.getLongVolatile(HIGHEST_ROOT_OFFSET) }
+        inline set(value) = highestRootLock.withLock { map.putLongVolatile(HIGHEST_ROOT_OFFSET, value) }
 
     var lowestUsedRoot: Long?
         inline get() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-            map.getLong(LOWEST_USED_ROOT_OFFSET).takeUnless { it == UNUSED }
+            map.getLongVolatile(LOWEST_USED_ROOT_OFFSET).takeUnless { it == UNUSED }
         }
         inline set(value) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-            map.putLong(LOWEST_USED_ROOT_OFFSET, value ?: UNUSED)
+            map.putLongVolatile(LOWEST_USED_ROOT_OFFSET, value ?: UNUSED)
         }
 
     var reservedSlotBitset: Long
-        inline get() = lowestUsedRootAndReservedSlotBitsetLock.withLock { map.getLong(RESERVED_SLOT_BITSET_OFFSET) }
+        inline get() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
+            map.getLongVolatile(RESERVED_SLOT_BITSET_OFFSET)
+        }
         inline set(value) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-            map.putLong(RESERVED_SLOT_BITSET_OFFSET, value)
+            map.putLongVolatile(RESERVED_SLOT_BITSET_OFFSET, value)
         }
 
     fun getSlotLowestUsedRoot(slotIndex: Int) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-        map.getLong(getSlotOffset(slotIndex)).takeUnless { it == UNUSED }
+        map.getLongVolatile(getSlotOffset(slotIndex)).takeUnless { it == UNUSED }
     }
 
     fun setSlotLowestUsedRoot(slotIndex: Int, value: Long?): Unit = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-        map.putLong(getSlotOffset(slotIndex), value ?: UNUSED)
+        map.putLongVolatile(getSlotOffset(slotIndex), value ?: UNUSED)
     }
 
     private fun getActuallyReservedSlots() = SLOTS.fold(0L) { bitset, slotIndex ->
@@ -221,7 +225,7 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
     fun recalculateLowestUsedRoot() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
         var lowestUsedRoot = Long.MAX_VALUE
         forEachReservedSlot { slotIndex ->
-            val slotLowestUsedRoot = map.getLong(SLOTS_OFFSET + slotIndex * SLOT_SIZE)
+            val slotLowestUsedRoot = map.getLongVolatile(SLOTS_OFFSET + slotIndex * SLOT_SIZE)
             if (slotLowestUsedRoot != UNUSED) {
                 lowestUsedRoot = lowestUsedRoot.coerceAtMost(slotLowestUsedRoot)
             }
