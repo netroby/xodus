@@ -102,6 +102,16 @@ class FileBasedProcessCoordinator private constructor(
         }
     }
 
+    override fun withExclusiveLock(action: () -> Unit) = file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
+        file.refreshReservedSlotBitmask()
+        if (file.isSlotReservedExclusively(slotIndex)) {
+            action()
+            true
+        } else {
+            false
+        }
+    }
+
     override fun close() {
         file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
             file.reservedSlotBitset = file.reservedSlotBitset and getSlotBit(slotIndex).inv()
@@ -250,6 +260,10 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
 
     private fun isSlotReserved(slotIndex: Int) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
         (reservedSlotBitset and getSlotBit(slotIndex)) != 0L
+    }
+
+    fun isSlotReservedExclusively(slotIndex: Int) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
+        reservedSlotBitset == getSlotBit(slotIndex)
     }
 
     private inline fun forEachReservedSlot(action: (Int) -> Unit) = lowestUsedRootAndReservedSlotBitsetLock.withLock {

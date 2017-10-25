@@ -24,5 +24,10 @@ class DummyProcessCoordinator : ProcessCoordinator {
 
     override fun <T> withHighestRootLock(action: () -> T) = action()
 
+    override fun withExclusiveLock(action: () -> Unit): Boolean {
+        action()
+        return true
+    }
+
     override fun close() {}
 }

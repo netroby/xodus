@@ -24,5 +24,7 @@ interface ProcessCoordinator : AutoCloseable {
 
     fun <T> withHighestRootLock(action: () -> T): T
 
+    fun withExclusiveLock(action: () -> Unit): Boolean
+
     override fun close()
 }
