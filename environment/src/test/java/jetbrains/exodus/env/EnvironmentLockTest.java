@@ -85,10 +85,9 @@ public class EnvironmentLockTest extends EnvironmentTestsBase {
             protected void execute() throws Throwable {
                 final File dir = getEnvDirectory();
                 try {
-                    env = newEnvironmentInstance(LogConfig.create(new FileDataReader(dir, 16), new FileDataWriter(dir, LOCK_ID)), new EnvironmentConfig().setLogLockTimeout(5000));
+                    env = newEnvironmentInstance(LogConfig.create(new FileDataReader(dir, 16), new FileDataWriter(dir)), new EnvironmentConfig());
                     wasOpened[0] = true;
                 } catch (ExodusException e) {
-                    Assert.assertTrue(e.getMessage().contains(LOCK_ID));
                     wasOpened[0] = false;
                 }
             }

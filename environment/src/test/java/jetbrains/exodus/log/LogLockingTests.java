@@ -37,14 +37,6 @@ public class LogLockingTests extends LogTestsBase {
     }
 
     @Test
-    public void testLockContents() throws IOException {
-        initLog(1);
-        final DataWriter writer = log.getConfig().getWriter();
-        closeLog();
-        Assert.assertTrue(writer.lockInfo().contains("org.junit."));
-    }
-
-    @Test
     public void testDirectoryAlreadyLocked() throws IOException {
         initLog(1);
         File xdLockFile = new File(getLogDirectory(), "xd.lck");

@@ -120,8 +120,6 @@ public final class Environments {
             config.setMemoryUsagePercentage(ec.getMemoryUsagePercentage());
         }
         return newLogInstance(config.setFileSize(ec.getLogFileSize()).
-                setLockTimeout(ec.getLogLockTimeout()).
-                setLockId(ec.getLogLockId()).
                 setCachePageSize(ec.getLogCachePageSize()).
                 setCacheOpenFilesCount(ec.getLogCacheOpenFilesCount()).
                 setCacheUseNio(ec.getLogCacheUseNio()).

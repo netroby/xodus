@@ -82,7 +82,6 @@ public final class Log implements Closeable {
     @SuppressWarnings({"OverlyLongMethod", "ThisEscapedInObjectConstruction", "OverlyCoupledMethod"})
     public Log(@NotNull final LogConfig config) {
         this.config = config;
-        tryLock();
         created = System.currentTimeMillis();
         blockAddrs = new LongSkipList();
         fileSize = config.getFileSize();
@@ -645,7 +644,6 @@ public final class Log implements Closeable {
         flush(true);
         reader.close();
         bufferedWriter.close();
-        release();
         synchronized (blockAddrs) {
             blockAddrs.clear();
         }
@@ -653,10 +651,6 @@ public final class Log implements Closeable {
 
     public boolean isClosing() {
         return isClosing;
-    }
-
-    public void release() {
-        bufferedWriter.release();
     }
 
     public void clear() {
@@ -837,15 +831,6 @@ public final class Log implements Closeable {
         if (result.pageSize != pageSize) {
             throw new ExodusException("SharedLogCache was created with page size " + result.pageSize +
                 " and then requested with page size " + pageSize + ". EnvironmentConfig.LOG_CACHE_PAGE_SIZE was set manually.");
-        }
-    }
-
-    private void tryLock() {
-        final long lockTimeout = config.getLockTimeout();
-        final DataWriter writer = config.getWriter();
-        if (!writer.lock(lockTimeout)) {
-            throw new ExodusException("Can't acquire environment lock after " +
-                lockTimeout + " ms.\n\n Lock owner info: \n" + writer.lockInfo());
         }
     }
 

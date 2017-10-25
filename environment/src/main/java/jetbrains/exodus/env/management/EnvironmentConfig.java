@@ -59,11 +59,6 @@ public class EnvironmentConfig extends MBeanBase implements EnvironmentConfigMBe
     }
 
     @Override
-    public long getLogLockTimeout() {
-        return config.getLogLockTimeout();
-    }
-
-    @Override
     public int getLogCachePageSize() {
         return config.getLogCachePageSize();
     }

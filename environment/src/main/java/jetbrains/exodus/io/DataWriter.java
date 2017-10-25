@@ -33,26 +33,4 @@ public interface DataWriter extends Closeable {
     void close();
 
     void openOrCreateBlock(long address, long length);
-
-    /**
-     * Try to lock writer during specified time.
-     *
-     * @param timeout - if writer is already locked try to lock it during specified timeout.
-     * @return true if locked successfully, false otherwise
-     */
-    boolean lock(long timeout);
-
-    /**
-     * Releases writer
-     *
-     * @return true if released successfully, false otherwise
-     */
-    boolean release();
-
-    /**
-     * For debug purposes, returns detailed information about current lock owner. Can be used if lock() failed.
-     *
-     * @return Human-readable information about lock owner.
-     */
-    String lockInfo();
 }

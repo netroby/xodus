@@ -391,23 +391,19 @@ public class EnvironmentImpl implements Environment {
                 throw new EnvironmentClosedException(throwableOnClose); // add combined stack trace information
             }
             checkInactive(ec.getEnvCloseForcedly());
-            try {
-                if (!ec.getEnvIsReadonly() && ec.isGcEnabled()) {
-                    executeInTransaction(new TransactionalExecutable() {
-                        @Override
-                        public void execute(@NotNull final Transaction txn) {
-                            final UtilizationProfile up = gc.getUtilizationProfile();
-                            up.setDirty(true);
-                            up.save(txn);
-                        }
-                    });
-                }
-                ec.removeChangedSettingsListener(envSettingsListener);
-                logCacheHitRate = log.getCacheHitRate();
-                log.close();
-            } finally {
-                log.release();
+            if (!ec.getEnvIsReadonly() && ec.isGcEnabled()) {
+                executeInTransaction(new TransactionalExecutable() {
+                    @Override
+                    public void execute(@NotNull final Transaction txn) {
+                        final UtilizationProfile up = gc.getUtilizationProfile();
+                        up.setDirty(true);
+                        up.save(txn);
+                    }
+                });
             }
+            ec.removeChangedSettingsListener(envSettingsListener);
+            logCacheHitRate = log.getCacheHitRate();
+            log.close();
             if (storeGetCache == null) {
                 storeGetCacheHitRate = 0;
             } else {

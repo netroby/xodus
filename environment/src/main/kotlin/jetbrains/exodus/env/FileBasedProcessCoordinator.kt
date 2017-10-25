@@ -16,7 +16,7 @@
 package jetbrains.exodus.env
 
 import jetbrains.exodus.ExodusException
-import jetbrains.exodus.io.LockingManager
+import org.agrona.concurrent.UnsafeBuffer
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -25,6 +25,7 @@ import java.nio.channels.FileLock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
+private const val FILE_NAME = "xd.lck"
 private const val VERSION = 1
 private const val UNUSED = -1L
 
@@ -116,7 +117,7 @@ class FileBasedProcessCoordinator private constructor(
                     throw ExodusException("Cannot create database directory: " + databaseLocation)
                 }
             }
-            val file = RandomAccessFile(File(databaseLocation, LockingManager.LOCK_FILE_NAME), "rw")
+            val file = RandomAccessFile(File(databaseLocation, FILE_NAME), "rw")
 
             return file.lockVersion().use {
                 file.tryLockEverythingExceptVersion()?.use {

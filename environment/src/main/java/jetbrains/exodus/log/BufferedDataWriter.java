@@ -185,21 +185,6 @@ class BufferedDataWriter implements TransactionalDataWriter {
     }
 
     @Override
-    public boolean lock(long timeout) {
-        return child.lock(timeout);
-    }
-
-    @Override
-    public boolean release() {
-        return child.release();
-    }
-
-    @Override
-    public String lockInfo() {
-        return child.lockInfo();
-    }
-
-    @Override
     public byte[] getHighPage(final long alignedAddress) {
         MutablePage currentPage = this.currentPage;
         do {

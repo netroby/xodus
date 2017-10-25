@@ -36,16 +36,10 @@ public class FileDataWriter extends AbstractDataWriter {
     @NotNull
     private final File dir;
     private final FileChannel dirChannel;
-    @NotNull
-    private final LockingManager lockingManager;
     @Nullable
     private RandomAccessFile file;
 
-    public FileDataWriter(@NotNull final File directory) {
-        this(directory, null);
-    }
-
-    public FileDataWriter(@NotNull File directory, @Nullable String lockId) {
+    public FileDataWriter(@NotNull File directory) {
         file = null;
         dir = directory;
         FileChannel channel = null;
@@ -55,7 +49,6 @@ public class FileDataWriter extends AbstractDataWriter {
             logger.warn("Can't open directory channel. Log directory fsync won't be performed.");
         }
         dirChannel = channel;
-        lockingManager = new LockingManager(dir, lockId);
     }
 
     @Override
@@ -67,26 +60,8 @@ public class FileDataWriter extends AbstractDataWriter {
         try {
             file.write(b, off, len);
         } catch (IOException ioe) {
-            if (lockingManager.getUsableSpace() < len) {
-                throw new OutOfDiskSpaceException(ioe);
-            }
             throw new ExodusException("Can't write", ioe);
         }
-    }
-
-    @Override
-    public boolean lock(long timeout) {
-        return lockingManager.lock(timeout);
-    }
-
-    @Override
-    public boolean release() {
-        return lockingManager.release();
-    }
-
-    @Override
-    public String lockInfo() {
-        return lockingManager.lockInfo();
     }
 
     @Override

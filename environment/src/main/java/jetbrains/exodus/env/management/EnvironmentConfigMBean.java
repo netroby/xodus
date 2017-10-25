@@ -29,8 +29,6 @@ public interface EnvironmentConfigMBean {
 
     long getLogFileSize();
 
-    long getLogLockTimeout();
-
     int getLogCachePageSize();
 
     int getLogCacheOpenFilesCount();
