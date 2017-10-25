@@ -22,6 +22,7 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
+import java.nio.channels.OverlappingFileLockException
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -229,10 +230,18 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
     }
 
     private fun getActuallyReservedSlots() = SLOTS.fold(0L) { bitset, slotIndex ->
-        bitset or (file.channel.tryLock(getSlotOffset(slotIndex).toLong(), SLOT_SIZE.toLong(), false)?.use {
-            getSlotBit(slotIndex)
-        } ?: if (isSlotReserved(slotIndex)) 0L else throw ExodusException("Unreserved slot area is locked in the file"))
+        bitset or when {
+            !isSlotLocked(slotIndex) -> getSlotBit(slotIndex)
+            isSlotReserved(slotIndex) -> 0L
+            else -> throw ExodusException("Unreserved slot area is locked in the file")
+        }
     }.inv()
+
+    private fun isSlotLocked(slotIndex: Int) = try {
+        file.channel.tryLock(getSlotOffset(slotIndex).toLong(), SLOT_SIZE.toLong(), false)?.release() == null
+    } catch (e: OverlappingFileLockException) {
+        true
+    }
 
     fun refreshReservedSlotBitmask() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
         reservedSlotBitset = getActuallyReservedSlots()
