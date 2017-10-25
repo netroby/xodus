@@ -50,6 +50,8 @@ class FileBasedProcessCoordinator private constructor(
         private val slotIndex: Int
 ) : ProcessCoordinator {
 
+    private var exclusive = false
+
     override fun tryAcquireWriterLock() = file.writerLock.tryAcquire()
 
     override var highestRoot: Long?
@@ -102,13 +104,21 @@ class FileBasedProcessCoordinator private constructor(
         }
     }
 
-    override fun withExclusiveLock(action: () -> Unit) = file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
+    override fun withExclusiveLock(action: () -> Unit): Boolean {
         file.refreshReservedSlotBitmask()
-        if (file.isSlotReservedExclusively(slotIndex)) {
-            action()
-            true
-        } else {
-            false
+        return file.lowestUsedRootAndReservedSlotBitsetLock.withLock {
+            if (file.isSlotReservedExclusively(slotIndex)) {
+                val wasExclusive = exclusive
+                exclusive = true
+                try {
+                    action()
+                } finally {
+                    exclusive = wasExclusive
+                }
+                true
+            } else {
+                false
+            }
         }
     }
 
