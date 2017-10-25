@@ -60,8 +60,10 @@ class FileBasedProcessCoordinator private constructor(
         set(value) {
             require(value == null || value >= 0) { "The highest root should not be negative" }
             file.highestRootLock.withLock {
-                require((value ?: UNUSED) >= file.highestRoot) {
-                    "The new highest root should not be less than the previous"
+                if (!exclusive) {
+                    require((value ?: UNUSED) >= file.highestRoot) {
+                        "The new highest root should not be less than the previous"
+                    }
                 }
                 file.highestRoot = value ?: UNUSED
             }

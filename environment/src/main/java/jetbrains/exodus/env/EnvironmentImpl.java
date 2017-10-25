@@ -325,6 +325,9 @@ public class EnvironmentImpl implements Environment {
 
     @Override
     public void clear() {
+        if (ec.getEnvIsReadonly()) {
+            throw new ExodusException("Environment is read only");
+        }
         final Thread currentThread = Thread.currentThread();
         if (txnDispatcher.getThreadPermits(currentThread) != 0 || roTxnDispatcher.getThreadPermits(currentThread) != 0) {
             throw new ExodusException("Environment.clear() can't proceed if there is a transaction in current thread");
@@ -343,12 +346,21 @@ public class EnvironmentImpl implements Environment {
                         metaWriteLock.lock();
                         try {
                             gc.clear();
-                            log.clear();
-                            invalidateStoreGetCache();
-                            throwableOnCommit = null;
-                            final Pair<MetaTree, Integer> meta = MetaTree.create(this);
-                            metaTree = meta.getFirst();
-                            structureId.set(meta.getSecond());
+                            if (!coordinator.withExclusiveLock(new Function0<Unit>() {
+                                @Override
+                                public Unit invoke() {
+                                    log.clear();
+                                    invalidateStoreGetCache();
+                                    throwableOnCommit = null;
+                                    final Pair<MetaTree, Integer> meta = MetaTree.create(EnvironmentImpl.this);
+                                    metaTree = meta.getFirst();
+                                    structureId.set(meta.getSecond());
+                                    coordinator.setHighestRoot(log.approveHighAddress());
+                                    return Unit.INSTANCE;
+                                }
+                            })) {
+                                throw new ExodusException("Environment is accessed concurrently");
+                            }
                         } finally {
                             metaWriteLock.unlock();
                         }
@@ -820,14 +832,29 @@ public class EnvironmentImpl implements Environment {
     }
 
     void setHighAddress(final long highAddress) {
+        if (ec.getEnvIsReadonly()) {
+            throw new ExodusException("Environment is read only");
+        }
         synchronized (commitLock) {
-            log.setHighAddress(highAddress);
-            final Pair<MetaTree, Integer> meta = MetaTree.create(this);
-            metaWriteLock.lock();
-            try {
-                metaTree = meta.getFirst();
-            } finally {
-                metaWriteLock.unlock();
+            if (highAddress > log.getHighAddress()) {
+                throw new ExodusException("Only can decrease high address");
+            }
+            if (!coordinator.withExclusiveLock(new Function0<Unit>() {
+                @Override
+                public Unit invoke() {
+                    log.setHighAddress(highAddress);
+                    final Pair<MetaTree, Integer> meta = MetaTree.create(EnvironmentImpl.this);
+                    metaWriteLock.lock();
+                    try {
+                        metaTree = meta.getFirst();
+                    } finally {
+                        metaWriteLock.unlock();
+                    }
+                    coordinator.setHighestRoot(log.approveHighAddress());
+                    return Unit.INSTANCE;
+                }
+            })) {
+                throw new ExodusException("Environment is accessed concurrently");
             }
         }
     }
