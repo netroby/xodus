@@ -173,7 +173,7 @@ private fun RandomAccessFile.formatCoordinationFile() {
     val buffer = ByteBuffer.allocate(SLOTS_OFFSET)
 
     buffer.putInt(VERSION)
-    buffer.put(0) // writer lock
+    buffer.putInt(0) // writer lock
     buffer.putLong(UNUSED) // highest root
     buffer.putLong(UNUSED) // lowest used root
     buffer.putLong(0) // reserved slot bitset
