@@ -101,19 +101,21 @@ public class EnvironmentImpl implements Environment {
         this.log = log;
         this.ec = ec;
         applyEnvironmentSettings(log.getLocation(), ec);
-        final Pair<MetaTree, Integer>[] meta = new Pair[1];
         this.coordinator = coordinator;
+        structureId = new AtomicInteger();
         try {
             coordinator.withHighestRootLock(new Function0<Unit>() {
                 @Override
                 public Unit invoke() {
                     if (coordinator.getHighestRoot() == null) {
                         log.init();
-                        meta[0] = MetaTree.create(EnvironmentImpl.this);
+                        final Pair<MetaTree, Integer> meta = MetaTree.create(EnvironmentImpl.this);
                         coordinator.setHighestRoot(log.approveHighAddress());
+                        coordinator.setHighestMetaTreeRoot(meta.getFirst().root);
+                        metaTree = meta.getFirst();
+                        structureId.set(meta.getSecond());
                     } else {
-                        log.setHighAddress(coordinator.getHighestRoot(), false);
-                        meta[0] = MetaTree.createWithoutRecovery(EnvironmentImpl.this);
+                        resetHighAddress();
                     }
                     if (!ec.getEnvIsReadonly()) {
                         if (!coordinator.tryAcquireWriterLock()) {
@@ -123,8 +125,6 @@ public class EnvironmentImpl implements Environment {
                     return Unit.INSTANCE;
                 }
             });
-            metaTree = meta[0].getFirst();
-            structureId = new AtomicInteger(meta[0].getSecond());
             txns = new TransactionSet();
             txnSafeTasks = new LinkedList<>();
             invalidateStoreGetCache();
@@ -357,6 +357,7 @@ public class EnvironmentImpl implements Environment {
                                     metaTree = meta.getFirst();
                                     structureId.set(meta.getSecond());
                                     coordinator.setHighestRoot(log.approveHighAddress());
+                                    coordinator.setHighestMetaTreeRoot(metaTree.root);
                                     return Unit.INSTANCE;
                                 }
                             })) {
@@ -467,12 +468,28 @@ public class EnvironmentImpl implements Environment {
     }
 
     public long getAllStoreCount() {
-        metaReadLock.lock();
-        try {
-            return metaTree.getAllStoreCount();
-        } finally {
-            metaReadLock.unlock();
-        }
+        return coordinator.withHighestRootLock(new Function0<Long>() {
+            @Override
+            public Long invoke() {
+                metaReadLock.lock();
+                try {
+                    if (coordinator.getHighestMetaTreeRoot() == metaTree.root) {
+                        return metaTree.getAllStoreCount();
+                    }
+                } finally {
+                    metaReadLock.unlock();
+                }
+                metaWriteLock.lock();
+                try {
+                    if (coordinator.getHighestMetaTreeRoot() != metaTree.root) {
+                        resetHighAddress();
+                    }
+                    return metaTree.getAllStoreCount();
+                } finally {
+                    metaWriteLock.unlock();
+                }
+            }
+        });
     }
 
     @Override
@@ -654,17 +671,19 @@ public class EnvironmentImpl implements Environment {
                             // but it's quite difficult to resolve all possible inconsistencies afterwards,
                             // so think twice before removing the following line
                             log.flush();
-                            coordinator.setHighestRoot(log.approveHighAddress());
+                            metaWriteLock.lock();
+                            try {
+                                metaTree = tree[0];
+                                coordinator.setHighestRoot(log.approveHighAddress());
+                                coordinator.setHighestMetaTreeRoot(metaTree.root);
+                                txn.setMetaTree(metaTree);
+                                txn.executeCommitHook();
+                            } finally {
+                                metaWriteLock.unlock();
+                            }
                             return expiredLoggables;
                         }
                     });
-                    metaWriteLock.lock();
-                    try {
-                        txn.setMetaTree(metaTree = tree[0]);
-                        txn.executeCommitHook();
-                    } finally {
-                        metaWriteLock.unlock();
-                    }
                     resultingHighAddress = log.approveHighAddress();
                 } catch (Throwable t) { // pokemon exception handling to decrease try/catch block overhead
                     loggerError("Failed to flush transaction", t);
@@ -702,16 +721,44 @@ public class EnvironmentImpl implements Environment {
         if (acquireTxn) {
             acquireTransaction(txn);
         }
-        final Runnable beginHook = txn.getBeginHook();
-        metaReadLock.lock();
-        try {
-            if (beginHook != null) {
-                beginHook.run();
+
+        return coordinator.withHighestRootLock(new Function0<MetaTree>() {
+            @Override
+            public MetaTree invoke() {
+                final Runnable beginHook = txn.getBeginHook();
+                metaReadLock.lock();
+                try {
+                    if (coordinator.getHighestMetaTreeRoot() == metaTree.root) {
+                        if (beginHook != null) {
+                            beginHook.run();
+                        }
+                        return metaTree;
+                    }
+                } finally {
+                    metaReadLock.unlock();
+                }
+                metaWriteLock.lock();
+                try {
+                    if (coordinator.getHighestMetaTreeRoot() != metaTree.root) {
+                        resetHighAddress();
+                    }
+                    if (beginHook != null) {
+                        beginHook.run();
+                    }
+                    return metaTree;
+                } finally {
+                    metaWriteLock.unlock();
+                }
             }
-            return metaTree;
-        } finally {
-            metaReadLock.unlock();
-        }
+        });
+    }
+
+    private void resetHighAddress() {
+        log.setHighAddress(coordinator.getHighestRoot(), false);
+        final Pair<MetaTree, Integer> meta =
+                MetaTree.loadTree(EnvironmentImpl.this, coordinator.getHighestMetaTreeRoot());
+        metaTree = meta.getFirst();
+        structureId.set(meta.getSecond());
     }
 
     MetaTree getMetaTree() {
@@ -747,10 +794,10 @@ public class EnvironmentImpl implements Environment {
             if (ec.getEnvIsReadonly() && ec.getEnvReadonlyEmptyStores()) {
                 return createTemporaryEmptyStore(name);
             }
+            final ReadWriteTransaction tx = throwIfReadonly(txn, "Can't create a store in read-only transaction");
             final int structureId = allocateStructureId();
             metaInfo = TreeMetaInfo.load(this, config.duplicates, config.prefixing, structureId);
             result = createStore(name, metaInfo);
-            final ReadWriteTransaction tx = throwIfReadonly(txn, "Can't create a store in read-only transaction");
             tx.getMutableTree(result);
             tx.storeCreated(result);
         } else {
@@ -857,6 +904,7 @@ public class EnvironmentImpl implements Environment {
                         metaWriteLock.unlock();
                     }
                     coordinator.setHighestRoot(log.approveHighAddress());
+                    coordinator.setHighestMetaTreeRoot(metaTree.root);
                     return Unit.INSTANCE;
                 }
             })) {
