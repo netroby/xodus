@@ -36,7 +36,9 @@ private const val WRITER_LOCK_OFFSET = VERSION_SIZE
 private const val WRITER_LOCK_SIZE = 4
 private const val HIGHEST_ROOT_OFFSET = WRITER_LOCK_OFFSET + WRITER_LOCK_SIZE
 private const val HIGHEST_ROOT_SIZE = 8
-private const val LOWEST_USED_ROOT_OFFSET = HIGHEST_ROOT_OFFSET + HIGHEST_ROOT_SIZE
+private const val HIGHEST_META_TREE_ROOT_OFFSET = HIGHEST_ROOT_OFFSET + HIGHEST_ROOT_SIZE
+private const val HIGHEST_META_TREE_ROOT_SIZE = 8
+private const val LOWEST_USED_ROOT_OFFSET = HIGHEST_META_TREE_ROOT_OFFSET + HIGHEST_META_TREE_ROOT_SIZE
 private const val LOWEST_USED_ROOT_SIZE = 8
 private const val RESERVED_SLOT_BITSET_OFFSET = LOWEST_USED_ROOT_OFFSET + LOWEST_USED_ROOT_SIZE
 private const val RESERVED_SLOT_BITSET_SIZE = 8
@@ -66,6 +68,20 @@ class FileBasedProcessCoordinator private constructor(
                     }
                 }
                 file.highestRoot = value ?: UNUSED
+            }
+        }
+
+    override var highestMetaTreeRoot: Long?
+        get() = file.highestMetaTreeRoot.takeUnless { it == UNUSED }
+        set(value) {
+            require(value == null || value >= 0) { "The highest meta tree root should not be negative" }
+            file.highestRootLock.withLock {
+                if (!exclusive) {
+                    require((value ?: UNUSED) >= file.highestMetaTreeRoot) {
+                        "The new highest meta tree root should not be less than the previous"
+                    }
+                }
+                file.highestMetaTreeRoot = value ?: UNUSED
             }
         }
 
@@ -175,6 +191,7 @@ private fun RandomAccessFile.formatCoordinationFile() {
     buffer.putInt(VERSION)
     buffer.putInt(0) // writer lock
     buffer.putLong(UNUSED) // highest root
+    buffer.putLong(UNUSED) // highest meta tree root
     buffer.putLong(UNUSED) // lowest used root
     buffer.putLong(0) // reserved slot bitset
 
@@ -206,6 +223,10 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
     var highestRoot: Long
         inline get() = map.getLongVolatile(HIGHEST_ROOT_OFFSET)
         inline set(value) = map.putLongVolatile(HIGHEST_ROOT_OFFSET, value)
+
+    var highestMetaTreeRoot: Long
+        inline get() = map.getLongVolatile(HIGHEST_META_TREE_ROOT_OFFSET)
+        inline set(value) = map.putLongVolatile(HIGHEST_META_TREE_ROOT_OFFSET, value)
 
     var lowestUsedRoot: Long?
         inline get() = lowestUsedRootAndReservedSlotBitsetLock.withLock {

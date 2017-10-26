@@ -17,6 +17,7 @@ package jetbrains.exodus.env
 
 interface ProcessCoordinator : AutoCloseable {
     var highestRoot: Long?
+    var highestMetaTreeRoot: Long?
     val lowestUsedRoot: Long?
     var localLowestUsedRoot: Long?
 
