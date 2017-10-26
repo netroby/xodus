@@ -326,7 +326,7 @@ public class EnvironmentImpl implements Environment {
     @Override
     public void clear() {
         if (ec.getEnvIsReadonly()) {
-            throw new ExodusException("Environment is read only");
+            throw new ReadonlyTransactionException("Can't clear read-only environment");
         }
         final Thread currentThread = Thread.currentThread();
         if (txnDispatcher.getThreadPermits(currentThread) != 0 || roTxnDispatcher.getThreadPermits(currentThread) != 0) {
@@ -833,7 +833,7 @@ public class EnvironmentImpl implements Environment {
 
     void setHighAddress(final long highAddress) {
         if (ec.getEnvIsReadonly()) {
-            throw new ExodusException("Environment is read only");
+            throw new ReadonlyTransactionException("Can't set high address of read-only environment");
         }
         synchronized (commitLock) {
             if (highAddress > log.getHighAddress()) {
