@@ -204,8 +204,8 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
             ReentrantFileLock(LOWEST_USED_ROOT_OFFSET, LOWEST_USED_ROOT_SIZE + RESERVED_SLOT_BITSET_SIZE)
 
     var highestRoot: Long
-        inline get() = highestRootLock.withLock { map.getLongVolatile(HIGHEST_ROOT_OFFSET) }
-        inline set(value) = highestRootLock.withLock { map.putLongVolatile(HIGHEST_ROOT_OFFSET, value) }
+        inline get() = map.getLongVolatile(HIGHEST_ROOT_OFFSET)
+        inline set(value) = map.putLongVolatile(HIGHEST_ROOT_OFFSET, value)
 
     var lowestUsedRoot: Long?
         inline get() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
@@ -216,18 +216,15 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         }
 
     var reservedSlotBitset: Long
-        inline get() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-            map.getLongVolatile(RESERVED_SLOT_BITSET_OFFSET)
-        }
-        inline set(value) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
+        inline get() = map.getLongVolatile(RESERVED_SLOT_BITSET_OFFSET)
+        inline set(value) {
             map.putLongVolatile(RESERVED_SLOT_BITSET_OFFSET, value)
         }
 
-    fun getSlotLowestUsedRoot(slotIndex: Int) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-        map.getLongVolatile(getSlotOffset(slotIndex)).takeUnless { it == UNUSED }
-    }
+    fun getSlotLowestUsedRoot(slotIndex: Int) =
+            map.getLongVolatile(getSlotOffset(slotIndex)).takeUnless { it == UNUSED }
 
-    fun setSlotLowestUsedRoot(slotIndex: Int, value: Long?): Unit = lowestUsedRootAndReservedSlotBitsetLock.withLock {
+    fun setSlotLowestUsedRoot(slotIndex: Int, value: Long?) {
         map.putLongVolatile(getSlotOffset(slotIndex), value ?: UNUSED)
     }
 
@@ -268,7 +265,7 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         return slotIndex
     }
 
-    fun recalculateLowestUsedRoot() = lowestUsedRootAndReservedSlotBitsetLock.withLock {
+    fun recalculateLowestUsedRoot() {
         var lowestUsedRoot = Long.MAX_VALUE
         forEachReservedSlot { slotIndex ->
             val slotLowestUsedRoot = map.getLongVolatile(SLOTS_OFFSET + slotIndex * SLOT_SIZE)
@@ -279,13 +276,9 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         this.lowestUsedRoot = lowestUsedRoot.takeUnless { it == Long.MAX_VALUE }
     }
 
-    private fun isSlotReserved(slotIndex: Int) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-        (reservedSlotBitset and getSlotBit(slotIndex)) != 0L
-    }
+    private fun isSlotReserved(slotIndex: Int) = (reservedSlotBitset and getSlotBit(slotIndex)) != 0L
 
-    fun isSlotReservedExclusively(slotIndex: Int) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
-        reservedSlotBitset == getSlotBit(slotIndex)
-    }
+    fun isSlotReservedExclusively(slotIndex: Int) = reservedSlotBitset == getSlotBit(slotIndex)
 
     private inline fun forEachReservedSlot(action: (Int) -> Unit) = lowestUsedRootAndReservedSlotBitsetLock.withLock {
         SLOTS.forEach { slotIndex ->
