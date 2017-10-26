@@ -60,6 +60,9 @@ public class FileDataWriter extends AbstractDataWriter {
         try {
             file.write(b, off, len);
         } catch (IOException ioe) {
+            if (dir.getUsableSpace() <= len) {
+                throw new OutOfDiskSpaceException(ioe);
+            }
             throw new ExodusException("Can't write", ioe);
         }
     }
