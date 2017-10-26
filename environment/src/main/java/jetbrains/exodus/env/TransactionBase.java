@@ -58,6 +58,19 @@ public abstract class TransactionBase implements Transaction {
     }
 
     @Override
+    public int compareTo(@NotNull final Transaction right) {
+        final long thisHighAddress = getHighAddress();
+        final long rightHighAddress = right.getHighAddress();
+        if (thisHighAddress < rightHighAddress) {
+            return -1;
+        }
+        if (thisHighAddress > rightHighAddress) {
+            return 1;
+        }
+        return 0;
+    }
+
+    @Override
     public Transaction getSnapshot() {
         return getSnapshot(null);
     }

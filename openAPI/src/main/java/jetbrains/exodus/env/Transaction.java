@@ -30,6 +30,7 @@ import org.jetbrains.annotations.Nullable;
  * Exclusive transactions are used to have successive access to database. If you have an exclusive transaction,
  * no other transaction (except read-only) can be started against the same {@linkplain Environment} unless you
  * finish (commit or abort) your exclusive one.
+ * <p>Transactions are {@linkplain Comparable}. The greater transaction is, the newer database snapshot it holds.
  * <p>Given you have an instance of {@linkplain Environment} you can start new transaction:
  * <pre>
  * final Transaction txn = environment.beginTransaction();
@@ -49,7 +50,7 @@ import org.jetbrains.annotations.Nullable;
  * @see Environment#beginExclusiveTransaction()
  * @see EnvironmentConfig#setLogDurableWrite(boolean)
  */
-public interface Transaction {
+public interface Transaction extends Comparable<Transaction> {
 
     /**
      * Idempotent transaction changes nothing in database. It doesn't matter whether you flush it or revert,

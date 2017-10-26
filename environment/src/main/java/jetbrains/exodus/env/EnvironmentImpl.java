@@ -31,6 +31,7 @@ import jetbrains.exodus.util.DeferredIO;
 import jetbrains.exodus.util.IOUtil;
 import kotlin.Unit;
 import kotlin.jvm.functions.Function0;
+import kotlin.jvm.functions.Function1;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -531,11 +532,13 @@ public class EnvironmentImpl implements Environment {
 
     protected void finishTransaction(@NotNull final TransactionBase txn) {
         releaseTransaction(txn);
-        synchronized (txns) {
-            txns.remove(txn);
-            long oldestTxnHighAddress = txns.getOldestTxnHighAddress();
-            coordinator.setLocalLowestUsedRoot(oldestTxnHighAddress == Long.MAX_VALUE ? null : oldestTxnHighAddress);
-        }
+        txns.remove(txn, new Function1<Long, Unit>() {
+            @Override
+            public Unit invoke(Long minHighAddress) {
+                coordinator.setLocalLowestUsedRoot(txns.isEmpty() ? null : minHighAddress);
+                return Unit.INSTANCE;
+            }
+        });
         txn.setIsFinished();
         runTransactionSafeTasks();
     }
@@ -776,12 +779,15 @@ public class EnvironmentImpl implements Environment {
 
     void registerTransaction(@NotNull final TransactionBase txn) {
         checkIfTransactionCreatedAgainstThis(txn);
-        synchronized (txns) {
-            // N.B! due to TransactionImpl.revert(), there can appear a txn which is already in the transaction set
-            // any implementation of transaction set should process this well
-            txns.add(txn);
-            coordinator.setLocalLowestUsedRoot(txns.getOldestTxnHighAddress());
-        }
+        // N.B! due to TransactionImpl.revert(), there can appear a txn which is already in the transaction set
+        // any implementation of transaction set should process this well
+        txns.add(txn, new Function1<Long, Unit>() {
+            @Override
+            public Unit invoke(Long minHighAddress) {
+                coordinator.setLocalLowestUsedRoot(minHighAddress);
+                return Unit.INSTANCE;
+            }
+        });
     }
 
     boolean isRegistered(@NotNull final ReadWriteTransaction txn) {
