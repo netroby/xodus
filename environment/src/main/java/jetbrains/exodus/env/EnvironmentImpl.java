@@ -119,7 +119,7 @@ public class EnvironmentImpl implements Environment {
                     }
                     if (!ec.getEnvIsReadonly()) {
                         if (!coordinator.tryAcquireWriterLock()) {
-                            throw new ExodusException("Unable to acquire writer lock");
+                            throw new ExodusException(getLocation() + ": unable to acquire writer lock");
                         }
                     }
                     return Unit.INSTANCE;
@@ -756,7 +756,7 @@ public class EnvironmentImpl implements Environment {
     private void resetHighAddress() {
         log.setHighAddress(coordinator.getHighestRoot(), false);
         final Pair<MetaTree, Integer> meta =
-                MetaTree.loadTree(EnvironmentImpl.this, coordinator.getHighestMetaTreeRoot());
+            MetaTree.loadTree(EnvironmentImpl.this, coordinator.getHighestMetaTreeRoot());
         metaTree = meta.getFirst();
         structureId.set(meta.getSecond());
     }

@@ -80,7 +80,7 @@ class LogTestsBase {
                 if (log == null) {
                     config.setReader(reader);
                     config.setWriter(writer);
-                    log = new Log(config);
+                    log = new Log(config, null);
                 }
             }
         }
@@ -90,7 +90,7 @@ class LogTestsBase {
         if (log == null) {
             synchronized (this) {
                 if (log == null) {
-                    log = new Log(LogConfig.create(reader, writer));
+                    log = new Log(LogConfig.create(reader, writer), null);
                 }
             }
         }

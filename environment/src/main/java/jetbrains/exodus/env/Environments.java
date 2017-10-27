@@ -15,11 +15,10 @@
  */
 package jetbrains.exodus.env;
 
-import jetbrains.exodus.io.DataReader;
-import jetbrains.exodus.io.FileDataReader;
 import jetbrains.exodus.log.Log;
 import jetbrains.exodus.log.LogConfig;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 
@@ -61,13 +60,15 @@ public final class Environments {
 
     @NotNull
     public static Environment newInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec) {
-        final ProcessCoordinator coordinator = getProcessCoordinator(config);
+        final ProcessCoordinator coordinator = config.createProcessCcordinator();
         return newInstance(config, ec, coordinator);
     }
 
     @NotNull
-    public static Environment newInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec, @NotNull final ProcessCoordinator coordinator) {
-        return prepare(new EnvironmentImpl(newLogInstance(config, ec), ec, coordinator));
+    public static Environment newInstance(@NotNull final LogConfig config,
+                                          @NotNull final EnvironmentConfig ec,
+                                          @NotNull final ProcessCoordinator coordinator) {
+        return prepare(new EnvironmentImpl(newLogInstance(config, ec, coordinator), ec, coordinator));
     }
 
     @NotNull
@@ -97,22 +98,26 @@ public final class Environments {
 
     @NotNull
     public static ContextualEnvironment newContextualInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec) {
-        final ProcessCoordinator coordinator = getProcessCoordinator(config);
+        final ProcessCoordinator coordinator = config.createProcessCcordinator();
         return newContextualInstance(config, ec, coordinator);
     }
 
     @NotNull
-    public static ContextualEnvironment newContextualInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec, @NotNull final ProcessCoordinator coordinator) {
-        return prepare(new ContextualEnvironmentImpl(newLogInstance(config, ec), ec, coordinator));
+    public static ContextualEnvironment newContextualInstance(@NotNull final LogConfig config,
+                                                              @NotNull final EnvironmentConfig ec,
+                                                              @NotNull final ProcessCoordinator coordinator) {
+        return prepare(new ContextualEnvironmentImpl(newLogInstance(config, ec, coordinator), ec, coordinator));
     }
 
     @NotNull
     public static Log newLogInstance(@NotNull final File dir, @NotNull final EnvironmentConfig ec) {
-        return newLogInstance(new LogConfig().setDir(dir), ec);
+        return newLogInstance(new LogConfig().setDir(dir), ec, null);
     }
 
     @NotNull
-    public static Log newLogInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec) {
+    public static Log newLogInstance(@NotNull final LogConfig config,
+                                     @NotNull final EnvironmentConfig ec,
+                                     @Nullable final ProcessCoordinator coordinator) {
         final Long maxMemory = ec.getMemoryUsage();
         if (maxMemory != null) {
             config.setMemoryUsage(maxMemory);
@@ -120,36 +125,28 @@ public final class Environments {
             config.setMemoryUsagePercentage(ec.getMemoryUsagePercentage());
         }
         return newLogInstance(config.setFileSize(ec.getLogFileSize()).
-                setCachePageSize(ec.getLogCachePageSize()).
-                setCacheOpenFilesCount(ec.getLogCacheOpenFilesCount()).
-                setCacheUseNio(ec.getLogCacheUseNio()).
-                setCacheFreePhysicalMemoryThreshold(ec.getLogCacheFreePhysicalMemoryThreshold()).
-                setDurableWrite(ec.getLogDurableWrite()).
-                setSharedCache(ec.isLogCacheShared()).
-                setNonBlockingCache(ec.isLogCacheNonBlocking()).
-                setCleanDirectoryExpected(ec.isLogCleanDirectoryExpected()).
-                setClearInvalidLog(ec.isLogClearInvalid()).
-                setSyncPeriod(ec.getLogSyncPeriod()).
-                setFullFileReadonly(ec.isLogFullFileReadonly()));
+            setCachePageSize(ec.getLogCachePageSize()).
+            setCacheOpenFilesCount(ec.getLogCacheOpenFilesCount()).
+            setCacheUseNio(ec.getLogCacheUseNio()).
+            setCacheFreePhysicalMemoryThreshold(ec.getLogCacheFreePhysicalMemoryThreshold()).
+            setDurableWrite(ec.getLogDurableWrite()).
+            setSharedCache(ec.isLogCacheShared()).
+            setNonBlockingCache(ec.isLogCacheNonBlocking()).
+            setCleanDirectoryExpected(ec.isLogCleanDirectoryExpected()).
+            setClearInvalidLog(ec.isLogClearInvalid()).
+            setSyncPeriod(ec.getLogSyncPeriod()).
+            setFullFileReadonly(ec.isLogFullFileReadonly()), coordinator);
     }
 
     @NotNull
-    public static Log newLogInstance(@NotNull final LogConfig config) {
+    public static Log newLogInstance(@NotNull final LogConfig config, @Nullable final ProcessCoordinator coordinator) {
         // In order to avoid XD-96, we need to load the DatabaseRoot class before creating Log instance
-        return new Log(config);
+        return new Log(config, coordinator);
     }
 
     @NotNull
     static <T extends EnvironmentImpl> T prepare(@NotNull final T env) {
         env.getGC().getUtilizationProfile().load();
         return env;
-    }
-
-    @NotNull
-    private static ProcessCoordinator getProcessCoordinator(@NotNull LogConfig config) {
-        final DataReader reader = config.getReader();
-        return reader instanceof FileDataReader
-                ? FileBasedProcessCoordinator.Companion.create(((FileDataReader) reader).getDir())
-                : new DummyProcessCoordinator();
     }
 }

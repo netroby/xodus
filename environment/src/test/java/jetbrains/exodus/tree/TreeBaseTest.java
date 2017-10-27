@@ -80,7 +80,7 @@ public abstract class TreeBaseTest {
     private void createLog() {
         LogConfig config = createLogConfig();
         config.setDir(tempFolder);
-        log = new Log(config);
+        log = new Log(config, null);
         log.init();
     }
 

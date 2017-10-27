@@ -18,9 +18,12 @@ package jetbrains.exodus.log;
 import jetbrains.exodus.*;
 import jetbrains.exodus.core.dataStructures.LongArrayList;
 import jetbrains.exodus.core.dataStructures.skiplists.LongSkipList;
+import jetbrains.exodus.env.ProcessCoordinator;
 import jetbrains.exodus.io.*;
 import jetbrains.exodus.util.DeferredIO;
 import jetbrains.exodus.util.IdGenerator;
+import kotlin.Unit;
+import kotlin.jvm.functions.Function0;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -41,6 +44,8 @@ public final class Log implements Closeable {
 
     @NotNull
     private final LogConfig config;
+    @Nullable
+    private final ProcessCoordinator ownProcessCoordinator;
     private final long created;
     @NotNull
     private final String location;
@@ -79,9 +84,14 @@ public final class Log implements Closeable {
     @Nullable
     private LogTestConfig testConfig;
 
-    @SuppressWarnings({"OverlyLongMethod", "ThisEscapedInObjectConstruction", "OverlyCoupledMethod"})
-    public Log(@NotNull final LogConfig config) {
+    public Log(@NotNull final LogConfig config,
+               @Nullable final ProcessCoordinator coordinator) {
         this.config = config;
+        if (coordinator != null) {
+            ownProcessCoordinator = null;
+        } else {
+            tryLock(ownProcessCoordinator = config.createProcessCcordinator());
+        }
         created = System.currentTimeMillis();
         blockAddrs = new LongSkipList();
         fileSize = config.getFileSize();
@@ -648,6 +658,9 @@ public final class Log implements Closeable {
         synchronized (blockAddrs) {
             blockAddrs.clear();
         }
+        if (ownProcessCoordinator != null) {
+            ownProcessCoordinator.close();
+        }
     }
 
     public boolean isClosing() {
@@ -833,6 +846,18 @@ public final class Log implements Closeable {
             throw new ExodusException("SharedLogCache was created with page size " + result.pageSize +
                 " and then requested with page size " + pageSize + ". EnvironmentConfig.LOG_CACHE_PAGE_SIZE was set manually.");
         }
+    }
+
+    private void tryLock(@NotNull final ProcessCoordinator ownProcessCoordinator) {
+        ownProcessCoordinator.withHighestRootLock(new Function0<Unit>() {
+            @Override
+            public Unit invoke() {
+                if (!ownProcessCoordinator.tryAcquireWriterLock()) {
+                    throw new ExodusException(getLocation() + ": unable to acquire writer lock");
+                }
+                return Unit.INSTANCE;
+            }
+        });
     }
 
     @NotNull

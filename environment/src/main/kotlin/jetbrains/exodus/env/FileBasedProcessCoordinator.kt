@@ -16,9 +16,13 @@
 package jetbrains.exodus.env
 
 import jetbrains.exodus.ExodusException
+import jetbrains.exodus.OutOfDiskSpaceException
 import org.agrona.concurrent.UnsafeBuffer
+import sun.nio.ch.DirectBuffer
 import java.io.File
+import java.io.IOException
 import java.io.RandomAccessFile
+import java.lang.Exception
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
@@ -156,16 +160,17 @@ class FileBasedProcessCoordinator private constructor(
                     throw ExodusException("Cannot create database directory: " + databaseLocation)
                 }
             }
-            val file = RandomAccessFile(File(databaseLocation, FILE_NAME), "rw")
+            val file = File(databaseLocation, FILE_NAME)
+            val raf = RandomAccessFile(file, "rw")
 
-            return file.lockVersion().use {
-                file.tryLockEverythingExceptVersion()?.use {
-                    file.formatCoordinationFile()
+            return raf.lockVersion().use {
+                raf.tryLockEverythingExceptVersion(file).use {
+                    raf.formatCoordinationFile()
                 }
 
-                file.checkCoordinationFileFormat()
+                raf.checkCoordinationFileFormat()
 
-                val coordinationFile = CoordinationFile(file)
+                val coordinationFile = CoordinationFile(raf)
 
                 FileBasedProcessCoordinator(coordinationFile, slotIndex = coordinationFile.reserveSlot())
             }
@@ -182,8 +187,19 @@ private fun getSlotBit(slotIndex: Int) = 1L shl slotIndex
 // TODO: add timeout
 private fun RandomAccessFile.lockVersion() = channel.lock(0L, VERSION_SIZE.toLong(), false)
 
-private fun RandomAccessFile.tryLockEverythingExceptVersion() =
-        channel.tryLock(VERSION_SIZE.toLong(), Long.MAX_VALUE - VERSION_SIZE, false)
+private fun RandomAccessFile.tryLockEverythingExceptVersion(file: File): FileLock {
+    val t: Exception = try {
+        return channel.tryLock(VERSION_SIZE.toLong(), Long.MAX_VALUE - VERSION_SIZE, false)
+    } catch (ioe: IOException) {
+        ioe
+    } catch (ofle: OverlappingFileLockException) {
+        ofle
+    }
+    if (file.usableSpace < 4096) {
+        throw OutOfDiskSpaceException(t)
+    }
+    throw ExodusException("Failed to lock file " + file.absolutePath, t)
+}
 
 private fun RandomAccessFile.formatCoordinationFile() {
     val buffer = ByteBuffer.allocate(SLOTS_OFFSET)
@@ -309,7 +325,14 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         }
     }
 
-    override fun close() = file.close()
+    override fun close() {
+        val buffer = map.byteBuffer()
+        if (buffer is DirectBuffer) {
+            val cleaner = (buffer as DirectBuffer).cleaner()
+            cleaner?.clean()
+        }
+        file.close()
+    }
 
     inner class ReentrantFileLock(val position: Int, val size: Int) {
         private val synchronizationLock = ReentrantLock()

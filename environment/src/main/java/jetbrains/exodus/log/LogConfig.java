@@ -16,7 +16,10 @@
 package jetbrains.exodus.log;
 
 import jetbrains.exodus.ExodusException;
+import jetbrains.exodus.env.DummyProcessCoordinator;
 import jetbrains.exodus.env.EnvironmentConfig;
+import jetbrains.exodus.env.FileBasedProcessCoordinator;
+import jetbrains.exodus.env.ProcessCoordinator;
 import jetbrains.exodus.io.DataReader;
 import jetbrains.exodus.io.DataWriter;
 import jetbrains.exodus.io.FileDataReader;
@@ -238,6 +241,14 @@ public class LogConfig {
     public LogConfig setFullFileReadonly(boolean fullFileReadonly) {
         this.fullFileReadonly = fullFileReadonly;
         return this;
+    }
+
+    @NotNull
+    public ProcessCoordinator createProcessCcordinator() {
+        final DataReader reader = getReader();
+        return reader instanceof FileDataReader
+            ? FileBasedProcessCoordinator.Companion.create(((FileDataReader) reader).getDir())
+            : new DummyProcessCoordinator();
     }
 
     public static LogConfig create(@NotNull final DataReader reader, @NotNull final DataWriter writer) {
