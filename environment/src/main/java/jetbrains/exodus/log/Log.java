@@ -259,6 +259,7 @@ public final class Log implements Closeable {
         }
         // end of test-only code
 
+        bufferedWriter.close();
         if (highAddress < this.highAddress) {
             // at first, remove all files which are higher than highAddress
             final LongArrayList blocksToDelete = new LongArrayList();
