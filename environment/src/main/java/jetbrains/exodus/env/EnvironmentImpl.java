@@ -552,7 +552,13 @@ public class EnvironmentImpl implements Environment {
         txns.remove(txn, new Function1<Long, Unit>() {
             @Override
             public Unit invoke(Long minHighAddress) {
-                coordinator.setLocalLowestUsedRoot(txns.isEmpty() ? null : minHighAddress);
+                try {
+                    coordinator.setLocalLowestUsedRoot(txns.isEmpty() ? null : minHighAddress);
+                } catch (Throwable t) {
+                    if (isOpen()) {
+                        throw t;
+                    }
+                }
                 return Unit.INSTANCE;
             }
         });
