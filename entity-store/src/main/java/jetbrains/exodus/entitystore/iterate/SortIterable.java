@@ -372,9 +372,7 @@ public final class SortIterable extends EntityIterableDecoratorBase {
         }
     }
 
-    // TODO:
-    //    1. Get rid of using property name for getting property value
-    //    2. Consider using Keap for lazy sorting
+    // TODO: consider using Keap for lazy sorting
     private final class StableInMemorySortIterator extends NonDisposableEntityIterator implements PropertyValueIterator {
 
         private final List<IdValuePair> pairs;
@@ -415,7 +413,7 @@ public final class SortIterable extends EntityIterableDecoratorBase {
 
             // finally sort
             final Object[] array = pairs.toArray();
-            Arrays.sort(array, new Comparator() {
+            Arrays.sort(array, ascending ? new Comparator() {
                 @Override
                 public int compare(final Object o1, final Object o2) {
                     final Comparable propValue1 = ((IdValuePair) o1).propValue;
@@ -430,6 +428,22 @@ public final class SortIterable extends EntityIterableDecoratorBase {
                         return 1;
                     }
                     return propValue1.compareTo(propValue2);
+                }
+            } : new Comparator() {
+                @Override
+                public int compare(final Object o1, final Object o2) {
+                    final Comparable propValue1 = ((IdValuePair) o1).propValue;
+                    final Comparable propValue2 = ((IdValuePair) o2).propValue;
+                    if (propValue1 == null && propValue2 == null) {
+                        return 0;
+                    }
+                    if (propValue1 == null) {
+                        return 1;
+                    }
+                    if (propValue2 == null) {
+                        return -1;
+                    }
+                    return propValue2.compareTo(propValue1);
                 }
             });
             final ListIterator<IdValuePair> i = pairs.listIterator();
