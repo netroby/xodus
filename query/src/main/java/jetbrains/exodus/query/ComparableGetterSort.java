@@ -15,25 +15,22 @@
  */
 package jetbrains.exodus.query;
 
-
+import jetbrains.exodus.entitystore.ComparableGetter;
 import jetbrains.exodus.entitystore.Entity;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Comparator;
-
 import static jetbrains.exodus.query.Utils.safe_equals;
 
-@Deprecated
-public class GenericSort extends Sort {
-    private final Comparator<Entity> cmp;
+public class ComparableGetterSort extends Sort {
+    private final ComparableGetter valueGetter;
 
-    public GenericSort(final NodeBase child, Comparator<Entity> cmp, boolean ascending) {
+    protected ComparableGetterSort(final NodeBase child, ComparableGetter valueGetter, boolean ascending) {
         super(child, ascending);
-        this.cmp = cmp;
+        this.valueGetter = valueGetter;
     }
 
-    public Comparator<Entity> getCmp() {
-        return cmp;
+    public ComparableGetter getValueGetter() {
+        return valueGetter;
     }
 
     @Override
@@ -43,32 +40,36 @@ public class GenericSort extends Sort {
 
     @Override
     public NodeBase getClone() {
-        return new GenericSort(getChild().getClone(), cmp, getAscending());
+        return new ComparableGetterSort(getChild().getClone(), valueGetter, getAscending());
     }
 
     @Override
     public boolean equalAsSort(Object o) {
-        if (!(o instanceof GenericSort)) {
+        if (!(o instanceof ComparableGetterSort)) {
             return false;
         }
-        GenericSort sort = (GenericSort) o;
-        return safe_equals(cmp, sort.cmp) && getAscending() == sort.getAscending();
+        ComparableGetterSort sort = (ComparableGetterSort) o;
+        return safe_equals(valueGetter, sort.valueGetter) && getAscending() == sort.getAscending();
     }
 
     @Override
-    public Iterable<Entity> applySort(String entityType, Iterable<Entity> iterable, @NotNull final SortEngine sortEngine) {
-        return sortEngine.sort(iterable, cmp, getAscending());
+    public Iterable<Entity> applySort(String entityType, Iterable<Entity> iterable, @NotNull SortEngine sortEngine) {
+        return sortEngine.sortInMemory(iterable, valueGetter, getAscending());
     }
 
     @Override
     public StringBuilder getHandle(StringBuilder sb) {
-        super.getHandle(sb).append('(').append(cmp).append(' ').append(getAscending()).append(')').append('{');
+        super.getHandle(sb).append('(').append(valueGetter).append(' ').append(getAscending()).append(')').append('{');
         child.getHandle(sb);
         return sb.append('}');
     }
 
     @Override
     public String getSimpleName() {
-        return "gs";
+        return "cgs";
+    }
+
+    public static ComparableGetterSort create(final NodeBase child, ComparableGetter valueGetter, boolean ascending) {
+        return new ComparableGetterSort(child, valueGetter, ascending);
     }
 }
