@@ -120,7 +120,7 @@ subprojects {
 
     // configuring projects with Kotlin sources
     dependencies {
-        compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+        compile "org.jetbrains.kotlin:kotlin-stdlib-jre7:$kotlinVersion"
         compile 'io.github.microutils:kotlin-logging:1.4.1'
     }
     compileKotlin {

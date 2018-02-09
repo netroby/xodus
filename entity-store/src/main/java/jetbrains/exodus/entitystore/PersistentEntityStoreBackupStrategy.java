@@ -51,7 +51,7 @@ public class PersistentEntityStoreBackupStrategy extends BackupStrategy {
                         return super.acceptFile(file);
                     }
                     // TODO: improve this?
-                    if ((file instanceof FileDescriptor) && fsBlobVault.getBlobHandleByFile(((FileDescriptor)file).getFile()) > lastUsedHandle) {
+                    if ((file instanceof FileDescriptor) && fsBlobVault.getBlobHandleByFile(((FileDescriptor) file).getFile()) > lastUsedHandle) {
                         return -1L;
                     }
                     return super.acceptFile(file);

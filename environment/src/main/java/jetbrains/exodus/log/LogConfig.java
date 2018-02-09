@@ -16,8 +16,8 @@
 package jetbrains.exodus.log;
 
 import jetbrains.exodus.ExodusException;
-import jetbrains.exodus.env.DummyProcessCoordinator;
 import jetbrains.exodus.crypto.StreamCipherProvider;
+import jetbrains.exodus.env.DummyProcessCoordinator;
 import jetbrains.exodus.env.EnvironmentConfig;
 import jetbrains.exodus.env.FileBasedProcessCoordinator;
 import jetbrains.exodus.env.ProcessCoordinator;

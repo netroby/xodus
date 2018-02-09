@@ -232,7 +232,7 @@ public class SortIndirectIterable extends EntityIterableDecoratorBase {
                                                     @Nullable final Comparable oldValue,
                                                     @Nullable final Comparable newValue) {
                 return decorated.isMatchedPropertyChanged(id, propertyId, oldValue, newValue) ||
-                        sortedLinksHandle.isMatchedPropertyChanged(id, propertyId, oldValue, newValue);
+                    sortedLinksHandle.isMatchedPropertyChanged(id, propertyId, oldValue, newValue);
             }
         };
     }

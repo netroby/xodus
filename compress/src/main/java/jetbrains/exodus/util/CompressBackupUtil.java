@@ -97,7 +97,7 @@ public class CompressBackupUtil {
     public static File backup(@NotNull final BackupBean backupBean) throws Exception {
         backupBean.setBackupStartTicks(System.currentTimeMillis());
         return backup(backupBean,
-                new File(backupBean.getBackupPath()), backupBean.getBackupNamePrefix(), backupBean.getBackupToZip());
+            new File(backupBean.getBackupPath()), backupBean.getBackupNamePrefix(), backupBean.getBackupToZip());
     }
 
     /**
@@ -127,12 +127,12 @@ public class CompressBackupUtil {
             final ArchiveOutputStream archive;
             if (zip) {
                 final ZipArchiveOutputStream zipArchive =
-                        new ZipArchiveOutputStream(new BufferedOutputStream(new FileOutputStream(target)));
+                    new ZipArchiveOutputStream(new BufferedOutputStream(new FileOutputStream(target)));
                 zipArchive.setLevel(Deflater.BEST_COMPRESSION);
                 archive = zipArchive;
             } else {
                 archive = new TarArchiveOutputStream(new GZIPOutputStream(
-                        new BufferedOutputStream(new FileOutputStream(target))));
+                    new BufferedOutputStream(new FileOutputStream(target))));
             }
             try (ArchiveOutputStream aos = archive) {
                 for (final VirtualFileDescriptor fd : strategy.getContents()) {
@@ -198,7 +198,7 @@ public class CompressBackupUtil {
         TarArchiveOutputStream tarOut = null;
         try {
             tarOut = new TarArchiveOutputStream(new GZIPOutputStream(
-                    new BufferedOutputStream(new FileOutputStream(dest)), 0x1000));
+                new BufferedOutputStream(new FileOutputStream(dest)), 0x1000));
             doTar("", source, tarOut);
             tarOut.close();
         } catch (IOException e) {

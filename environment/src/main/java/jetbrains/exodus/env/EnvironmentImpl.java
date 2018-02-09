@@ -447,9 +447,8 @@ public class EnvironmentImpl implements Environment {
                 }
                 ec.removeChangedSettingsListener(envSettingsListener);
                 logCacheHitRate = log.getCacheHitRate();
-                log.close();
             } finally {
-                log.release();
+                log.close();
             }
             if (storeGetCache == null) {
                 storeGetCacheHitRate = 0;

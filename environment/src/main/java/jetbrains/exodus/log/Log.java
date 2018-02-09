@@ -270,15 +270,15 @@ public final class Log implements Closeable {
         bufferedWriter.close();
         if (highAddress < this.highAddress) {
             // at first, remove all files which are higher than highAddress
-        final LongArrayList blocksToDelete = new LongArrayList();
-        long blockToTruncate = -1L;
-        for (final long blockAddress : fileAddresses.getArray()) {
-            if (blockAddress <= highAddress) {
-                blockToTruncate = blockAddress;
-                break;
+            final LongArrayList blocksToDelete = new LongArrayList();
+            long blockToTruncate = -1L;
+            for (final long blockAddress : fileAddresses.getArray()) {
+                if (blockAddress <= highAddress) {
+                    blockToTruncate = blockAddress;
+                    break;
+                }
+                blocksToDelete.add(blockAddress);
             }
-            blocksToDelete.add(blockAddress);
-        }
 
             if (truncate) {
                 // truncate log
@@ -300,10 +300,8 @@ public final class Log implements Closeable {
             final long oldLastFileAddress = getHighFileAddress();
             final long newLastFileAddress = getFileAddress(highAddress);
             if (oldLastFileAddress < newLastFileAddress) {
-                synchronized (blockAddrs) {
-                    for (long i = oldLastFileAddress + fileLengthBound; i <= newLastFileAddress; i += fileLengthBound) {
-                        blockAddrs.add(i);
-                    }
+                for (long i = oldLastFileAddress + fileLengthBound; i <= newLastFileAddress; i += fileLengthBound) {
+                    fileAddresses.add(i);
                 }
             }
         }

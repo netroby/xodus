@@ -15,7 +15,6 @@
  */
 package jetbrains.exodus.env;
 
-import jetbrains.exodus.log.Log;
 import jetbrains.exodus.crypto.StreamCipherProvider;
 import jetbrains.exodus.log.Log;
 import jetbrains.exodus.log.LogConfig;

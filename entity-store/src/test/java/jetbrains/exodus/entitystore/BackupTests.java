@@ -208,7 +208,7 @@ public class BackupTests extends EntityStoreTestBase {
                         final File file = ((BackupStrategy.FileDescriptor) fd).getFile();
                         if (file.isFile() && !file.getName().equals(FileSystemBlobVaultOld.VERSION_FILE)) {
                             assertTrue("" + blobVault.getBlobHandleByFile(file) + " > " + lastUsedBlobHandle[0],
-                                    blobVault.getBlobHandleByFile(file) <= lastUsedBlobHandle[0]);
+                                blobVault.getBlobHandleByFile(file) <= lastUsedBlobHandle[0]);
                         }
                     }
                 } finally {
