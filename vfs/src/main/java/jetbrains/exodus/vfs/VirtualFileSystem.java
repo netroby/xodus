@@ -347,6 +347,7 @@ public class VirtualFileSystem {
     public Iterable<File> getFiles(@NotNull final Transaction txn) {
         try (Cursor cursor = pathnames.openCursor(txn)) {
             return new Iterable<File>() {
+                @NotNull
                 @Override
                 public Iterator<File> iterator() {
                     return new Iterator<File>() {
@@ -388,31 +389,9 @@ public class VirtualFileSystem {
      * @see File#getDescriptor()
      */
     public long getFileLength(@NotNull final Transaction txn, final long fileDescriptor) {
-        // todo: compute length without traversing all clusters at least in case of linear clustering strategy
-        long result = 0;
-        try (ClusterIterator it = new ClusterIterator(this, txn, fileDescriptor)) {
-            // if clustering strategy is linear we can avoid reading cluster size for each cluster
-            final ClusteringStrategy cs = config.getClusteringStrategy();
-            if (cs.isLinear()) {
-                Cluster previous = null;
-                while (it.hasCluster()) {
-                    if (previous != null) {
-                        result += cs.getFirstClusterSize();
-                    }
-                    previous = it.getCurrent();
-                    it.moveToNext();
-                }
-                if (previous != null) {
-                    result += previous.getSize();
-                }
-            } else {
-                while (it.hasCluster()) {
-                    result += it.getCurrent().getSize();
-                    it.moveToNext();
-                }
-            }
+        try (ClusterIterator it = new ClusterIterator(this, txn, fileDescriptor, -1L)) {
+            return it.size();
         }
-        return result;
     }
 
     /**

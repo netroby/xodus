@@ -83,8 +83,6 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
     private LongHashMap<InputStream> blobStreams;
     @Nullable
     private LongHashMap<File> blobFiles;
-    @Nullable
-    private LongSet preservedBlobs;
     private LongSet deferredBlobsToDelete;
     private QueryCancellingPolicy queryCancellingPolicy;
 
@@ -755,7 +753,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
                          @Nullable final Comparable newValue) {
         final PropertyId propId = new PropertyId(id, propertyId);
         propsCache.remove(propId);
-        new PropertyChangedHandleCheckerImpl(this, id.getTypeId(), id.getLocalId(), propertyId,
+        new PropertyChangedHandleCheckerImpl(this, id, propertyId,
                 oldValue, newValue, mutableCache(), mutatedInTxn).updateCache();
     }
 
@@ -775,7 +773,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
         new LinkDeletedHandleChecker(this, sourceId, targetId, linkId, mutableCache(), mutatedInTxn).updateCache();
     }
 
-    void addBlob(final long blobHandle, @NotNull final InputStream stream) throws IOException {
+    void addBlob(final long blobHandle, @NotNull final InputStream stream) {
         LongHashMap<InputStream> blobStreams = this.blobStreams;
         if (blobStreams == null) {
             blobStreams = new LongHashMap<>();
@@ -845,17 +843,6 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
         return null;
     }
 
-    void preserveBlob(final long blobHandle) {
-        if (preservedBlobs == null) {
-            preservedBlobs = new LongHashSet();
-        }
-        preservedBlobs.add(blobHandle);
-    }
-
-    boolean isBlobPreserved(final long blobHandle) {
-        return preservedBlobs != null && preservedBlobs.contains(blobHandle);
-    }
-
     void deferBlobDeletion(final long blobHandle) {
         if (deferredBlobsToDelete == null) {
             deferredBlobsToDelete = new LongHashSet();
@@ -884,7 +871,6 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
         mutatedInTxn = null;
         blobStreams = null;
         blobFiles = null;
-        preservedBlobs = null;
         deferredBlobsToDelete = null;
     }
 
@@ -1253,8 +1239,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
 
     private static final class PropertyChangedHandleCheckerImpl extends HandleCheckerAdapter implements PropertyChangedHandleChecker {
 
-        private final int entityTypeId;
-        private final long localId;
+        private final EntityId id;
         private final int propertyId;
         @Nullable
         private final Comparable oldValue;
@@ -1262,7 +1247,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
         private final Comparable newValue;
 
         private PropertyChangedHandleCheckerImpl(@NotNull PersistentStoreTransaction txn,
-                                                 int entityTypeId, long localId, int propertyId,
+                                                 EntityId id, int propertyId,
                                                  @Nullable Comparable oldValue, @Nullable Comparable newValue,
                                                  @NotNull EntityIterableCacheAdapterMutable mutatedInTxn,
                                                  @NotNull List<Updatable> mutableCache) {
@@ -1270,8 +1255,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
             if (oldValue == null && newValue == null) {
                 throw new IllegalArgumentException("Either oldValue or newValue should be not null");
             }
-            this.entityTypeId = entityTypeId;
-            this.localId = localId;
+            this.id = id;
             this.propertyId = propertyId;
             this.oldValue = oldValue;
             this.newValue = newValue;
@@ -1284,12 +1268,12 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
 
         @Override
         public int getTypeId() {
-            return entityTypeId;
+            return id.getTypeId();
         }
 
         @Override
         public long getLocalId() {
-            return localId;
+            return id.getLocalId();
         }
 
         @Nullable
@@ -1306,7 +1290,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
 
         @Override
         public boolean checkHandle(@NotNull EntityIterableHandle handle) {
-            return handle.isMatchedPropertyChanged(entityTypeId, propertyId, oldValue, newValue)
+            return handle.isMatchedPropertyChanged(id, propertyId, oldValue, newValue)
                     && !handle.onPropertyChanged(this);
         }
 
@@ -1318,7 +1302,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
             PropertyChangedHandleCheckerImpl that = (PropertyChangedHandleCheckerImpl) obj;
 
             if (propertyId != that.propertyId) return false;
-            if (entityTypeId != that.entityTypeId) return false;
+            if (!id.equals(that.id)) return false;
             //noinspection SimplifiableIfStatement
             if (newValue != null ? !newValue.equals(that.newValue) : that.newValue != null) return false;
             return !(oldValue != null ? !oldValue.equals(that.oldValue) : that.oldValue != null);
@@ -1326,7 +1310,7 @@ public class PersistentStoreTransaction implements StoreTransaction, TxnGetterSt
 
         @Override
         public int hashCode() {
-            int result = entityTypeId;
+            int result = id.hashCode();
             result = 31 * result + propertyId;
             result = 31 * result + (oldValue != null ? oldValue.hashCode() : 0);
             result = 31 * result + (newValue != null ? newValue.hashCode() : 0);

@@ -26,6 +26,8 @@ import jetbrains.exodus.env.Cursor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
+
 @SuppressWarnings({"unchecked"})
 public final class PropertyRangeIterable extends PropertyRangeOrValueIterableBase {
 
@@ -58,8 +60,8 @@ public final class PropertyRangeIterable extends PropertyRangeOrValueIterableBas
                                  @NotNull final Comparable minValue,
                                  @NotNull final Comparable maxValue) {
         super(txn, entityTypeId, propertyId);
-        min = PropertyTypes.toLowerCase(minValue);
-        max = PropertyTypes.toLowerCase(maxValue);
+        min = Objects.requireNonNull(PropertyTypes.toLowerCase(minValue));
+        max = Objects.requireNonNull(PropertyTypes.toLowerCase(maxValue));
     }
 
     @Override
@@ -129,11 +131,11 @@ public final class PropertyRangeIterable extends PropertyRangeOrValueIterableBas
             }
 
             @Override
-            public boolean isMatchedPropertyChanged(final int typeId,
+            public boolean isMatchedPropertyChanged(@NotNull final EntityId id,
                                                     final int propId,
                                                     @Nullable final Comparable oldValue,
                                                     @Nullable final Comparable newValue) {
-                return propertyId == propId && entityTypeId == typeId && (isRangeAffected(oldValue) || isRangeAffected(newValue));
+                return propertyId == propId && entityTypeId == id.getTypeId() && (isRangeAffected(oldValue) || isRangeAffected(newValue));
             }
 
             private boolean isRangeAffected(@Nullable final Comparable value) {

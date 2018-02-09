@@ -1,9 +1,10 @@
 plugins {
-    id 'com.github.johnrengelman.shadow' version "1.2.4"
+    id 'com.github.johnrengelman.shadow' version "2.0.1"
 }
 
 dependencies {
     compile project(':sshd')
+    compile project(':crypto')
     compile 'com.hierynomus:sshj:0.19.1'
 }
 

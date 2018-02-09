@@ -15,6 +15,7 @@
  */
 package jetbrains.exodus.env;
 
+import jetbrains.exodus.crypto.KryptKt;
 import jetbrains.exodus.log.Log;
 import jetbrains.exodus.log.LogConfig;
 import org.jetbrains.annotations.NotNull;
@@ -125,6 +126,8 @@ public final class Environments {
             config.setMemoryUsagePercentage(ec.getMemoryUsagePercentage());
         }
         return newLogInstance(config.setFileSize(ec.getLogFileSize()).
+            setLockTimeout(ec.getLogLockTimeout()).
+            setLockId(ec.getLogLockId()).
             setCachePageSize(ec.getLogCachePageSize()).
             setCacheOpenFilesCount(ec.getLogCacheOpenFilesCount()).
             setCacheUseNio(ec.getLogCacheUseNio()).
@@ -135,7 +138,10 @@ public final class Environments {
             setCleanDirectoryExpected(ec.isLogCleanDirectoryExpected()).
             setClearInvalidLog(ec.isLogClearInvalid()).
             setSyncPeriod(ec.getLogSyncPeriod()).
-            setFullFileReadonly(ec.isLogFullFileReadonly()), coordinator);
+            setFullFileReadonly(ec.isLogFullFileReadonly()).
+            setCipherProvider(ec.getCipherId() == null ? null : KryptKt.newCipherProvider(ec.getCipherId())).
+            setCipherKey(ec.getCipherKey()).
+            setCipherBasicIV(ec.getCipherBasicIV()));
     }
 
     @NotNull

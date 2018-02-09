@@ -18,14 +18,17 @@ package jetbrains.exodus.query;
 
 import jetbrains.exodus.entitystore.Entity;
 import jetbrains.exodus.query.metadata.ModelMetaData;
+import org.jetbrains.annotations.Nullable;
 
 import static jetbrains.exodus.query.Utils.safe_equals;
 
 public class PropertyEqual extends NodeBase {
+
     private final String name;
+    @Nullable
     private final Comparable value;
 
-    public PropertyEqual(String name, Comparable value) {
+    public PropertyEqual(String name, @Nullable Comparable value) {
         this.name = name;
         this.value = value;
     }

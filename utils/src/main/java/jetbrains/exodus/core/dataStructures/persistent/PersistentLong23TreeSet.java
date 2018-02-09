@@ -63,9 +63,25 @@ public class PersistentLong23TreeSet implements PersistentLongSet {
         public LongIterator longIterator() {
             return new IteratorImpl(iterator());
         }
+
+        @Override
+        public LongIterator reverseLongIterator() {
+            return new IteratorImpl(reverseIterator());
+        }
+
+        @Override
+        public LongIterator tailLongIterator(long key) {
+            return new IteratorImpl(tailEntryIterator(key));
+        }
+
+        @Override
+        public LongIterator tailReverseLongIterator(long key) {
+            return new IteratorImpl(tailReverseEntryIterator(key));
+        }
     }
 
     protected static class MutableSet implements PersistentLongSet.MutableSet {
+
         private final PersistentLong23TreeMap.MutableMap<Boolean> map;
 
         MutableSet(Persistent23Tree<PersistentLongMap.Entry<Boolean>> set) {
@@ -75,6 +91,21 @@ public class PersistentLong23TreeSet implements PersistentLongSet {
         @Override
         public LongIterator longIterator() {
             return new IteratorImpl(map.iterator());
+        }
+
+        @Override
+        public LongIterator reverseLongIterator() {
+            return new IteratorImpl(map.reverseIterator());
+        }
+
+        @Override
+        public LongIterator tailLongIterator(long key) {
+            return new IteratorImpl(map.tailEntryIterator(key));
+        }
+
+        @Override
+        public LongIterator tailReverseLongIterator(long key) {
+            return new IteratorImpl(map.tailReverseEntryIterator(key));
         }
 
         @Override
@@ -104,6 +135,11 @@ public class PersistentLong23TreeSet implements PersistentLongSet {
                 return false;
             }
             return result;
+        }
+
+        @Override
+        public void clear() {
+            map.setRoot(null);
         }
 
         @Override

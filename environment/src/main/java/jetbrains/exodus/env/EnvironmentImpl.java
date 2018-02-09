@@ -20,6 +20,7 @@ import jetbrains.exodus.ExodusException;
 import jetbrains.exodus.backup.BackupStrategy;
 import jetbrains.exodus.core.dataStructures.ObjectCacheBase;
 import jetbrains.exodus.core.dataStructures.Pair;
+import jetbrains.exodus.crypto.StreamCipherProvider;
 import jetbrains.exodus.env.management.EnvironmentConfigWithOperations;
 import jetbrains.exodus.gc.GarbageCollector;
 import jetbrains.exodus.gc.UtilizationProfile;
@@ -95,6 +96,12 @@ public class EnvironmentImpl implements Environment {
     @Nullable
     private final StuckTransactionMonitor stuckTxnMonitor;
 
+    @Nullable
+    private final StreamCipherProvider streamCipherProvider;
+    @Nullable
+    private final byte[] cipherKey;
+    private final long cipherBasicIV;
+
     @SuppressWarnings({"ThisEscapedInObjectConstruction"})
     EnvironmentImpl(@NotNull final Log log, @NotNull final EnvironmentConfig ec,
                     @NotNull final ProcessCoordinator coordinator) {
@@ -156,6 +163,11 @@ public class EnvironmentImpl implements Environment {
             throwableOnClose = null;
 
             stuckTxnMonitor = (transactionTimeout() > 0) ? new StuckTransactionMonitor(this) : null;
+
+            final LogConfig logConfig = log.getConfig();
+            streamCipherProvider = logConfig.getCipherProvider();
+            cipherKey = logConfig.getCipherKey();
+            cipherBasicIV = logConfig.getCipherBasicIV();
 
             if (logger.isInfoEnabled()) {
                 logger.info("Exodus environment created: " + log.getLocation());
@@ -325,6 +337,23 @@ public class EnvironmentImpl implements Environment {
     }
 
     @Override
+    @Nullable
+    public StreamCipherProvider getCipherProvider() {
+        return streamCipherProvider;
+    }
+
+    @Override
+    @Nullable
+    public byte[] getCipherKey() {
+        return cipherKey;
+    }
+
+    @Override
+    public long getCipherBasicIV() {
+        return cipherBasicIV;
+    }
+
+    @Override
     public void clear() {
         if (ec.getEnvIsReadonly()) {
             throw new ReadonlyTransactionException("Can't clear read-only environment");
@@ -405,19 +434,23 @@ public class EnvironmentImpl implements Environment {
                 throw new EnvironmentClosedException(throwableOnClose); // add combined stack trace information
             }
             checkInactive(ec.getEnvCloseForcedly());
-            if (!ec.getEnvIsReadonly() && ec.isGcEnabled()) {
-                executeInTransaction(new TransactionalExecutable() {
-                    @Override
-                    public void execute(@NotNull final Transaction txn) {
-                        final UtilizationProfile up = gc.getUtilizationProfile();
-                        up.setDirty(true);
-                        up.save(txn);
-                    }
-                });
+            try {
+                if (!ec.getEnvIsReadonly() && ec.isGcEnabled()) {
+                    executeInTransaction(new TransactionalExecutable() {
+                        @Override
+                        public void execute(@NotNull final Transaction txn) {
+                            final UtilizationProfile up = gc.getUtilizationProfile();
+                            up.setDirty(true);
+                            up.save(txn);
+                        }
+                    });
+                }
+                ec.removeChangedSettingsListener(envSettingsListener);
+                logCacheHitRate = log.getCacheHitRate();
+                log.close();
+            } finally {
+                log.release();
             }
-            ec.removeChangedSettingsListener(envSettingsListener);
-            logCacheHitRate = log.getCacheHitRate();
-            log.close();
             if (storeGetCache == null) {
                 storeGetCacheHitRate = 0;
             } else {
@@ -439,6 +472,7 @@ public class EnvironmentImpl implements Environment {
         return throwableOnClose == null;
     }
 
+    @NotNull
     @Override
     public BackupStrategy getBackupStrategy() {
         return new EnvironmentBackupStrategyImpl(this);

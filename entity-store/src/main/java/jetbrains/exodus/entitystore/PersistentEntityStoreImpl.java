@@ -23,6 +23,8 @@ import jetbrains.exodus.core.dataStructures.Pair;
 import jetbrains.exodus.core.dataStructures.hash.HashMap;
 import jetbrains.exodus.core.dataStructures.hash.HashSet;
 import jetbrains.exodus.core.dataStructures.hash.IntHashMap;
+import jetbrains.exodus.crypto.EncryptedBlobVault;
+import jetbrains.exodus.crypto.StreamCipherProvider;
 import jetbrains.exodus.entitystore.PersistentStoreTransaction.TransactionType;
 import jetbrains.exodus.entitystore.iterate.EntityFromLinkSetIterable;
 import jetbrains.exodus.entitystore.iterate.EntityFromLinksIterable;
@@ -204,7 +206,13 @@ public class PersistentEntityStoreImpl implements PersistentEntityStore, FlushLo
                 final PersistentStoreTransaction txn = (PersistentStoreTransaction) tx;
                 sequences = environment.openStore(SEQUENCES_STORE, StoreConfig.WITHOUT_DUPLICATES, txn.getEnvironmentTransaction());
                 if (blobVault == null) {
-                    setBlobVault(createDefaultFSBlobVault());
+                    BlobVault vault = createDefaultFSBlobVault();
+                    final StreamCipherProvider cipherProvider = environment.getCipherProvider();
+                    if (cipherProvider != null) {
+                        vault = new EncryptedBlobVault(vault, cipherProvider,
+                            Objects.requireNonNull(environment.getCipherKey()), environment.getCipherBasicIV());
+                    }
+                    blobVault = vault;
                 }
 
                 final TwoColumnTable entityTypesTable = new TwoColumnTable(txn,
@@ -269,7 +277,7 @@ public class PersistentEntityStoreImpl implements PersistentEntityStore, FlushLo
                 return result;
             }
         });
-        if (!config.getRefactoringSkipAll()) {
+        if (!config.getRefactoringSkipAll() && !environment.getEnvironmentConfig().getEnvIsReadonly()) {
             applyRefactorings(fromScratch); // this method includes refactorings that could be clustered into separate txns
         }
         executeInTransaction(new StoreTransactionalExecutable() {
@@ -424,7 +432,7 @@ public class PersistentEntityStoreImpl implements PersistentEntityStore, FlushLo
         return transaction;
     }
 
-    void registerTransaction(@NotNull final PersistentStoreTransaction txn) {
+    public void registerTransaction(@NotNull final PersistentStoreTransaction txn) {
         final Thread thread = Thread.currentThread();
         Deque<PersistentStoreTransaction> stack = txns.get(thread);
         if (stack == null) {
@@ -434,7 +442,7 @@ public class PersistentEntityStoreImpl implements PersistentEntityStore, FlushLo
         stack.push(txn);
     }
 
-    void unregisterTransaction(@NotNull final PersistentStoreTransaction txn) {
+    public void unregisterTransaction(@NotNull final PersistentStoreTransaction txn) {
         final Thread thread = Thread.currentThread();
         final Deque<PersistentStoreTransaction> stack = txns.get(thread);
         if (stack == null) {
@@ -516,10 +524,6 @@ public class PersistentEntityStoreImpl implements PersistentEntityStore, FlushLo
     @NotNull
     public BlobVault getBlobVault() {
         return blobVault;
-    }
-
-    void setBlobVault(@NotNull final BlobVault blobVault) {
-        this.blobVault = blobVault;
     }
 
     @Override
@@ -1712,6 +1716,7 @@ public class PersistentEntityStoreImpl implements PersistentEntityStore, FlushLo
         }
     }
 
+    @NotNull
     @Override
     public BackupStrategy getBackupStrategy() {
         return new PersistentEntityStoreBackupStrategy(this);
@@ -1734,10 +1739,8 @@ public class PersistentEntityStoreImpl implements PersistentEntityStore, FlushLo
         if (isEmptyOrInPlaceBlobHandle(blobHandle)) {
             return;
         }
-        if (!txn.isBlobPreserved(blobHandle)) {
-            txn.deleteBlob(blobHandle);
-            txn.deferBlobDeletion(blobHandle);
-        }
+        txn.deleteBlob(blobHandle);
+        txn.deferBlobDeletion(blobHandle);
     }
 
     private interface DataGetter {

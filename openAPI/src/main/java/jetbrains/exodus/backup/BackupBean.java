@@ -127,6 +127,7 @@ public class BackupBean implements Backupable {
         return backupException;
     }
 
+    @NotNull
     @Override
     public BackupStrategy getBackupStrategy() {
         final int targetsCount = targets.length;
@@ -145,17 +146,18 @@ public class BackupBean implements Backupable {
             }
 
             @Override
-            public Iterable<FileDescriptor> listFiles() {
-                return new Iterable<FileDescriptor>() {
+            public Iterable<VirtualFileDescriptor> getContents() {
+                return new Iterable<VirtualFileDescriptor>() {
+                    @NotNull
                     @Override
-                    public Iterator<FileDescriptor> iterator() {
-                        return new Iterator<FileDescriptor>() {
+                    public Iterator<VirtualFileDescriptor> iterator() {
+                        return new Iterator<VirtualFileDescriptor>() {
 
                             @Nullable
-                            private FileDescriptor next = null;
+                            private VirtualFileDescriptor next = null;
                             private int i = 0;
                             @NotNull
-                            private Iterator<FileDescriptor> it = EMPTY.listFiles().iterator();
+                            private Iterator<VirtualFileDescriptor> it = EMPTY.getContents().iterator();
 
                             @Override
                             public boolean hasNext() {
@@ -163,7 +165,7 @@ public class BackupBean implements Backupable {
                             }
 
                             @Override
-                            public FileDescriptor next() {
+                            public VirtualFileDescriptor next() {
                                 try {
                                     return getNext();
                                 } finally {
@@ -176,19 +178,19 @@ public class BackupBean implements Backupable {
                                 throw new UnsupportedOperationException("remove");
                             }
 
-                            private FileDescriptor getNext() {
+                            private VirtualFileDescriptor getNext() {
                                 if (next == null) {
                                     while (!it.hasNext()) {
                                         if (i >= targetsCount) {
                                             return next;
                                         }
-                                        it = wrapped[i++].listFiles().iterator();
+                                        it = wrapped[i++].getContents().iterator();
                                     }
                                     next = it.next();
                                 }
-                                final long acceptedSize = wrapped[i - 1].acceptFile(next.getFile());
+                                final long acceptedSize = wrapped[i - 1].acceptFile(next);
                                 if (acceptedSize < next.getFileSize()) {
-                                    return new FileDescriptor(next.getFile(), next.getPath(), acceptedSize);
+                                    return next.copy(acceptedSize);
                                 }
                                 return next;
                             }

@@ -15,9 +15,9 @@
  */
 package jetbrains.exodus.entitystore.util;
 
-import jetbrains.exodus.core.dataStructures.hash.LongHashSet;
 import jetbrains.exodus.core.dataStructures.hash.LongIterator;
 import jetbrains.exodus.core.dataStructures.hash.LongSet;
+import jetbrains.exodus.core.dataStructures.hash.PackedLongHashSet;
 import jetbrains.exodus.entitystore.EntityId;
 import jetbrains.exodus.entitystore.PersistentEntityId;
 import jetbrains.exodus.entitystore.iterate.EntityIdSet;
@@ -45,24 +45,23 @@ public class ImmutableSingleTypeEntityIdBitSet implements SortedEntityIdSet {
             throw new IllegalArgumentException();
         }
         this.singleTypeId = singleTypeId;
-        size = length;
         min = source[0];
-        max = source[size - 1];
+        max = source[length - 1];
         final long bitsCount = max - min + 1;
         if (min < 0 || bitsCount >= Integer.MAX_VALUE) {
             throw new IllegalArgumentException();
         }
         data = new BitSet((int) bitsCount);
-        for (int i = 0; i < size; i++) {
+        for (int i = 0; i < length; i++) {
             data.set((int) (source[i] - min));
         }
+        size = data.cardinality();
     }
 
-    public ImmutableSingleTypeEntityIdBitSet(final int singleTypeId, long min, long max, final LongIterator source, int length) {
+    public ImmutableSingleTypeEntityIdBitSet(final int singleTypeId, long min, long max, final LongIterator source) {
         this.singleTypeId = singleTypeId;
         this.min = min;
         this.max = max;
-        size = length;
         final long bitsCount = max - min + 1;
         if (min < 0 || bitsCount >= Integer.MAX_VALUE) {
             throw new IllegalArgumentException();
@@ -71,6 +70,7 @@ public class ImmutableSingleTypeEntityIdBitSet implements SortedEntityIdSet {
         while (source.hasNext()) {
             data.set((int) (source.next() - min));
         }
+        size = data.cardinality();
     }
 
     @Override
@@ -156,7 +156,7 @@ public class ImmutableSingleTypeEntityIdBitSet implements SortedEntityIdSet {
     @Override
     public LongSet getTypeSetSnapshot(int typeId) {
         if (typeId == singleTypeId) {
-            LongHashSet result = new LongHashSet(size);
+            final LongSet result = new PackedLongHashSet();
             int next = data.nextSetBit(0);
             while (next != -1) {
                 result.add(next + min);

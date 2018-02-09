@@ -56,12 +56,22 @@ public abstract class BlobVault implements BlobHandleGenerator, Backupable {
     private final BlobStringsCache stringContentCache;
     private final int vaultIdentity;
 
+    protected BlobVault(@NotNull final BlobVault source) {
+        config = source.config;
+        stringContentCache = source.stringContentCache;
+        vaultIdentity = source.vaultIdentity;
+    }
+
     protected BlobVault(@NotNull final PersistentEntityStoreConfig config) {
         this.config = config;
         stringContentCache = config.isBlobStringsCacheShared() ?
             stringContentCacheCreator.getInstance() :
             new BlobStringsCache.BlobStringsCacheCreator().getInstance();
         vaultIdentity = identityGenerator.nextId();
+    }
+
+    public BlobVault getSourceVault() {
+        return this;
     }
 
     public int getIdentity() {
@@ -151,7 +161,7 @@ public abstract class BlobVault implements BlobHandleGenerator, Backupable {
      * @param blobHandle blob handle
      * @param txn        {@linkplain Transaction} instance
      * @return string content of blob identified by specified blob handle
-     * @throws IOException
+     * @throws IOException if something went wrong
      */
     @Nullable
     public final String getStringContent(final long blobHandle, @NotNull final Transaction txn) throws IOException {

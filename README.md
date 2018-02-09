@@ -1,9 +1,9 @@
-# JetBrains Xodus
+# <a href="https://github.com/JetBrains/xodus/wiki"><img src="https://raw.githubusercontent.com/wiki/jetbrains/xodus/xodus.png" width=160></a>
 
 [![official JetBrains project](http://jb.gg/badges/official.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 [![TeamCity (build status)](https://img.shields.io/teamcity/http/teamcity.jetbrains.com/s/Xodus_Build.svg)](http://teamcity.jetbrains.com/viewType.html?buildTypeId=Xodus_Build&guest=1)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.jetbrains.xodus/xodus-openAPI/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Corg.jetbrains.xodus)
-[![GitHub license](https://img.shields.io/hexpm/l/plug.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 ![Repository Size](https://reposs.herokuapp.com/?path=JetBrains/xodus)
 ![Pure Java + Kotlin](https://img.shields.io/badge/100%25-java%2bkotlin-orange.svg)
 [![Stack Overflow](http://img.shields.io/:stack%20overflow-xodus-brightgreen.svg)](http://stackoverflow.com/questions/tagged/xodus)
@@ -51,7 +51,7 @@ final Environment env = Environments.newInstance("/home/me/.myAppData");
 env.executeInTransaction(new TransactionalExecutable() {
     @Override
     public void execute(@NotNull final Transaction txn) {
-        final Store store = env.openStore("Messages", StoreConfig.WITHOUT_DUPLICATES, txn)
+        final Store store = env.openStore("Messages", StoreConfig.WITHOUT_DUPLICATES, txn);
         store.put(txn, StringBinding.stringToEntry("Hello"), StringBinding.stringToEntry("World!"));
     }
 });
@@ -106,7 +106,8 @@ To assemble JARs and skip running tests, run:
 - [Xodus wiki](https://github.com/JetBrains/xodus/wiki)
 - [Report an issue](https://youtrack.jetbrains.com/issues/XD)
 - [Stack Overflow](http://stackoverflow.com/questions/tagged/xodus)
+- [Data definition and queries Kotlin DSL over Xodus](https://github.com/JetBrains/xodus-dnq)
+- [EntityStore browser](https://github.com/lehvolk/xodus-entity-browser)
 - [Check out the latest builds](https://teamcity.jetbrains.com/viewType.html?buildTypeId=Xodus_Build)
 - [Observe development in Upsource](https://upsource.jetbrains.com/Xodus/view)
-- [EntityStore browser](https://github.com/lehvolk/xodus-entity-browser)
 - <a href="mailto:xodus-feedback@jetbrains.com">Ask questions by e-mail</a>

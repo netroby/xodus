@@ -17,6 +17,7 @@ package jetbrains.exodus.log;
 
 import jetbrains.exodus.ExodusException;
 import jetbrains.exodus.env.DummyProcessCoordinator;
+import jetbrains.exodus.crypto.StreamCipherProvider;
 import jetbrains.exodus.env.EnvironmentConfig;
 import jetbrains.exodus.env.FileBasedProcessCoordinator;
 import jetbrains.exodus.env.ProcessCoordinator;
@@ -35,6 +36,7 @@ public class LogConfig {
     private File dir;
     private long fileSize;
     private long lockTimeout;
+    private String lockId;
     private long memoryUsage;
     private int memoryUsagePercentage;
     private DataReader reader;
@@ -51,6 +53,9 @@ public class LogConfig {
     private boolean clearInvalidLog;
     private long syncPeriod;
     private boolean fullFileReadonly;
+    private StreamCipherProvider cipherProvider;
+    private byte[] cipherKey;
+    private long cipherBasicIV;
 
     public LogConfig() {
     }
@@ -78,6 +83,15 @@ public class LogConfig {
 
     public LogConfig setLockTimeout(long lockTimeout) {
         this.lockTimeout = lockTimeout;
+        return this;
+    }
+
+    public String getLockId() {
+        return lockId;
+    }
+
+    public LogConfig setLockId(String lockId) {
+        this.lockId = lockId;
         return this;
     }
 
@@ -240,6 +254,33 @@ public class LogConfig {
 
     public LogConfig setFullFileReadonly(boolean fullFileReadonly) {
         this.fullFileReadonly = fullFileReadonly;
+        return this;
+    }
+
+    public StreamCipherProvider getCipherProvider() {
+        return cipherProvider;
+    }
+
+    public LogConfig setCipherProvider(StreamCipherProvider cipherProvider) {
+        this.cipherProvider = cipherProvider;
+        return this;
+    }
+
+    public byte[] getCipherKey() {
+        return cipherKey;
+    }
+
+    public LogConfig setCipherKey(byte[] cipherKey) {
+        this.cipherKey = cipherKey;
+        return this;
+    }
+
+    public long getCipherBasicIV() {
+        return cipherBasicIV;
+    }
+
+    public LogConfig setCipherBasicIV(long basicIV) {
+        this.cipherBasicIV = basicIV;
         return this;
     }
 

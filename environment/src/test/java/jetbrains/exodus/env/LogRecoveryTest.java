@@ -16,11 +16,11 @@
 package jetbrains.exodus.env;
 
 import jetbrains.exodus.log.Log;
+import jetbrains.exodus.crypto.StreamCipherProvider;
+import jetbrains.exodus.log.Log;
 import jetbrains.exodus.log.LogConfig;
 import jetbrains.exodus.tree.btree.BTreeBase;
 import org.junit.Test;
-
-import java.io.IOException;
 
 public class LogRecoveryTest extends EnvironmentTestsBase {
     private int[] seq;
@@ -34,53 +34,53 @@ public class LogRecoveryTest extends EnvironmentTestsBase {
         super.setUp();
         env.getEnvironmentConfig().setGcEnabled(false);
         seq = new int[]{BTreeBase.BOTTOM_ROOT, DatabaseRoot.DATABASE_ROOT_TYPE, BTreeBase.BOTTOM_ROOT,
-                BTreeBase.LEAF, BTreeBase.LEAF, BTreeBase.BOTTOM_ROOT, DatabaseRoot.DATABASE_ROOT_TYPE};
+            BTreeBase.LEAF, BTreeBase.LEAF, BTreeBase.BOTTOM_ROOT, DatabaseRoot.DATABASE_ROOT_TYPE};
         a = seq.length - 1;
         b = seq.length - 2;
     }
 
     @Test
-    public void testLastLoggableIncomplete0() throws IOException {
+    public void testLastLoggableIncomplete0() {
         cutAndCheckLastLoggableIncomplete(0, seq.length);
     }
 
     @Test
-    public void testLastLoggableIncomplete1() throws IOException {
+    public void testLastLoggableIncomplete1() {
         cutAndCheckLastLoggableIncomplete(1, a);
     }
 
     @Test
-    public void testLastLoggableIncomplete2() throws IOException {
+    public void testLastLoggableIncomplete2() {
         cutAndCheckLastLoggableIncomplete(2, a);
     }
 
     @Test
-    public void testLastLoggableIncomplete3() throws IOException {
+    public void testLastLoggableIncomplete3() {
         cutAndCheckLastLoggableIncomplete(3, a);
     }
 
     @Test
-    public void testLastLoggableIncomplete4() throws IOException {
+    public void testLastLoggableIncomplete4() {
         cutAndCheckLastLoggableIncomplete(4, a);
     }
 
     @Test
-    public void testLastLoggableIncomplete5() throws IOException {
+    public void testLastLoggableIncomplete5() {
         cutAndCheckLastLoggableIncomplete(5, a);
     }
 
     @Test
-    public void testLastLoggableIncomplete6() throws IOException {
+    public void testLastLoggableIncomplete6() {
         cutAndCheckLastLoggableIncomplete(6, a);
     }
 
     @Test
-    public void testLastLoggableIncomplete7() throws IOException {
+    public void testLastLoggableIncomplete7() {
         cutAndCheckLastLoggableIncomplete(7, a);
     }
 
     @Test
-    public void testLastLoggableIncomplete8() throws IOException {
+    public void testLastLoggableIncomplete8() {
         cutAndCheckLastLoggableIncomplete(8, b);
     }
 
@@ -95,6 +95,9 @@ public class LogRecoveryTest extends EnvironmentTestsBase {
 
         assertLoggableTypes(getLog(), 0, seq);
         env.close();
+        final StreamCipherProvider cipherProvider = env.getCipherProvider();
+        final byte[] cipherKey = env.getCipherKey();
+        final long cipherBasicIV = env.getCipherBasicIV();
         env = null;
 
         final long size = reader.getBlock(0).length();
@@ -102,9 +105,12 @@ public class LogRecoveryTest extends EnvironmentTestsBase {
         writer.close();
 
         // only 'max' first loggables should remain
-        Log log = Environments.newLogInstance(LogConfig.create(reader, writer), null);
-        log.init();
-        assertLoggableTypes(max, log.getLoggableIterator(0), seq);
+        final LogConfig config = LogConfig.create(reader, writer).
+            setCipherProvider(cipherProvider).setCipherKey(cipherKey).setCipherBasicIV(cipherBasicIV);
+        final Log newLog = Environments.newLogInstance(config, null);
+        newLog.init();
+        newLog.setHighAddress(newLog.getApprovedHighAddress());
+        assertLoggableTypes(max, newLog.getLoggableIterator(0), seq);
     }
 
 }
