@@ -154,7 +154,7 @@ class FileBasedProcessCoordinator private constructor(
     }
 
     companion object {
-        fun create(databaseLocation: File): FileBasedProcessCoordinator {
+        fun create(databaseLocation: File, timeout: Long = 0): FileBasedProcessCoordinator {
             if (!databaseLocation.exists()) {
                 if (!databaseLocation.mkdirs()) {
                     throw ExodusException("Cannot create database directory: " + databaseLocation)
@@ -163,8 +163,8 @@ class FileBasedProcessCoordinator private constructor(
             val file = File(databaseLocation, FILE_NAME)
             val raf = RandomAccessFile(file, "rw")
 
-            return raf.lockVersion().use {
-                raf.tryLockEverythingExceptVersion(file).use {
+            return raf.lockVersion(timeout).use {
+                raf.tryLockEverythingExceptVersion(file, timeout).use {
                     raf.formatCoordinationFile()
                 }
 
@@ -184,12 +184,11 @@ private fun getSlotOffset(slotIndex: Int) = SLOTS_OFFSET + slotIndex * SLOT_SIZE
 
 private fun getSlotBit(slotIndex: Int) = 1L shl slotIndex
 
-// TODO: add timeout
-private fun RandomAccessFile.lockVersion() = channel.lock(0L, VERSION_SIZE.toLong(), false)
+private fun RandomAccessFile.lockVersion(timeout: Long = 0) = channel.lock(0L, VERSION_SIZE.toLong(), false, timeout)
 
-private fun RandomAccessFile.tryLockEverythingExceptVersion(file: File): FileLock {
+private fun RandomAccessFile.tryLockEverythingExceptVersion(file: File, timeout: Long = 0): FileLock {
     val t: Exception = try {
-        return channel.tryLock(VERSION_SIZE.toLong(), Long.MAX_VALUE - VERSION_SIZE, false)
+        return channel.tryLock(VERSION_SIZE.toLong(), Long.MAX_VALUE - VERSION_SIZE, false, timeout)
     } catch (ioe: IOException) {
         ioe
     } catch (ofle: OverlappingFileLockException) {
@@ -373,4 +372,34 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
             }
         }
     }
+}
+
+
+private fun FileChannel.lock(position: Long, size: Long, shared: Boolean, timeout: Long = 0): FileLock {
+    return withTimeout(timeout) {
+        lock(position, size, shared)
+    }
+}
+
+private fun FileChannel.tryLock(position: Long, size: Long, shared: Boolean, timeout: Long = 0): FileLock {
+    return withTimeout(timeout) {
+        tryLock(position, size, shared)
+    }
+}
+
+private fun withTimeout(timeout: Long, action: () -> FileLock?): FileLock {
+    var currentMoment = System.currentTimeMillis()
+    val end = currentMoment + timeout
+    var result: FileLock? = null
+    var ex: Exception? = null
+    while (currentMoment <= end && result == null) {
+        try {
+            result = action()
+        } catch (e: Exception) {
+            ex = e
+        }
+        Thread.sleep(200)
+        currentMoment = System.currentTimeMillis()
+    }
+    return result ?: throw (ex ?: OverlappingFileLockException())
 }

@@ -93,7 +93,7 @@ public final class Log implements Closeable {
         if (coordinator != null) {
             ownProcessCoordinator = null;
         } else {
-            tryLock(ownProcessCoordinator = config.createProcessCcordinator());
+            tryLock(ownProcessCoordinator = config.createProcessCoordinator(config.getLockTimeout()));
         }
         created = System.currentTimeMillis();
         fileSize = config.getFileSize();

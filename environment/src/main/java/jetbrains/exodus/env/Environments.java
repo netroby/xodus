@@ -61,7 +61,7 @@ public final class Environments {
 
     @NotNull
     public static Environment newInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec) {
-        final ProcessCoordinator coordinator = config.createProcessCcordinator();
+        final ProcessCoordinator coordinator = config.createProcessCoordinator(ec.getLogLockTimeout());
         return newInstance(config, ec, coordinator);
     }
 
@@ -99,7 +99,7 @@ public final class Environments {
 
     @NotNull
     public static ContextualEnvironment newContextualInstance(@NotNull final LogConfig config, @NotNull final EnvironmentConfig ec) {
-        final ProcessCoordinator coordinator = config.createProcessCcordinator();
+        final ProcessCoordinator coordinator = config.createProcessCoordinator(ec.getLogLockTimeout());
         return newContextualInstance(config, ec, coordinator);
     }
 

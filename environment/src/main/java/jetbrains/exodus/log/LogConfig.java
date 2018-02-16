@@ -285,10 +285,10 @@ public class LogConfig {
     }
 
     @NotNull
-    public ProcessCoordinator createProcessCcordinator() {
+    public ProcessCoordinator createProcessCoordinator(long timeout) {
         final DataReader reader = getReader();
         return reader instanceof FileDataReader
-            ? FileBasedProcessCoordinator.Companion.create(((FileDataReader) reader).getDir())
+            ? FileBasedProcessCoordinator.Companion.create(((FileDataReader) reader).getDir(), timeout)
             : new DummyProcessCoordinator();
     }
 
