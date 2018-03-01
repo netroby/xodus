@@ -201,14 +201,14 @@ private fun RandomAccessFile.tryLockEverythingExceptVersion(file: File, timeout:
 }
 
 private fun RandomAccessFile.formatCoordinationFile() {
-    val buffer = ByteBuffer.allocate(SLOTS_OFFSET)
-
-    buffer.putInt(VERSION)
-    buffer.putInt(0) // writer lock
-    buffer.putLong(UNUSED) // highest root
-    buffer.putLong(UNUSED) // highest meta tree root
-    buffer.putLong(UNUSED) // lowest used root
-    buffer.putLong(0) // reserved slot bitset
+    val buffer = ByteBuffer.allocate(SLOTS_OFFSET).apply {
+        putInt(VERSION)
+        putInt(0) // writer lock
+        putLong(UNUSED) // highest root
+        putLong(UNUSED) // highest meta tree root
+        putLong(UNUSED) // lowest used root
+        putLong(0) // reserved slot bitset
+    }
 
     setLength(FILE_SIZE.toLong())
     seek(0)
@@ -229,9 +229,12 @@ private fun RandomAccessFile.checkCoordinationFileFormat() {
 }
 
 private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseable {
+
     private val map = UnsafeBuffer(file.channel.map(FileChannel.MapMode.READ_WRITE, 0, FILE_SIZE.toLong()))
+
     val writerLock = ReentrantFileLock(WRITER_LOCK_OFFSET, WRITER_LOCK_SIZE)
     val highestRootLock = ReentrantFileLock(HIGHEST_ROOT_OFFSET, HIGHEST_ROOT_SIZE)
+
     val lowestUsedRootAndReservedSlotBitsetLock =
             ReentrantFileLock(LOWEST_USED_ROOT_OFFSET, LOWEST_USED_ROOT_SIZE + RESERVED_SLOT_BITSET_SIZE)
 
@@ -327,16 +330,16 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
     override fun close() {
         val buffer = map.byteBuffer()
         if (buffer is DirectBuffer) {
-            val cleaner = (buffer as DirectBuffer).cleaner()
-            cleaner?.clean()
+            buffer.cleaner()?.clean()
         }
         file.close()
     }
 
     inner class ReentrantFileLock(val position: Int, val size: Int) {
+
         private val synchronizationLock = ReentrantLock()
+        @Volatile
         private var fileLock: FileLock? = null
-        val isLocked get() = fileLock != null
 
         fun acquire() = synchronizationLock.withLock {
             if (fileLock == null) {
@@ -355,10 +358,8 @@ private class CoordinationFile(private val file: RandomAccessFile) : AutoCloseab
         }
 
         fun release() = synchronizationLock.withLock {
-            fileLock?.let {
-                it.release()
-                fileLock = null
-            }
+            fileLock?.release()
+            fileLock = null
         }
 
         inline fun <R> withLock(optional: Boolean = false, action: () -> R): R {
