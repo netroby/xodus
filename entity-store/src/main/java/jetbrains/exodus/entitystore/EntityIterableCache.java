@@ -46,6 +46,8 @@ public final class EntityIterableCache {
     private ObjectCacheBase<Object, Long> iterableCountsCache;
     @NotNull
     final EntityStoreSharedAsyncProcessor processor;
+    // the value is updated by PersistentEntityStoreSettingsListener
+    public boolean isCachingDisabled;
 
     public EntityIterableCache(@NotNull final PersistentEntityStoreImpl store) {
         this.store = store;
@@ -54,6 +56,7 @@ public final class EntityIterableCache {
         clear();
         processor = new EntityStoreSharedAsyncProcessor(config.getEntityIterableCacheThreadCount());
         processor.start();
+        isCachingDisabled = config.isCachingDisabled();
         SharedTimer.registerPeriodicTask(new CacheHitRateAdjuster(this));
     }
 
@@ -77,7 +80,7 @@ public final class EntityIterableCache {
      * @return iterable which is cached or "it" itself if it's not cached.
      */
     public EntityIterableBase putIfNotCached(@NotNull final EntityIterableBase it) {
-        if (config.isCachingDisabled() || !it.canBeCached()) {
+        if (isCachingDisabled || !it.canBeCached()) {
             return it;
         }
 
